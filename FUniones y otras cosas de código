@@ -1,0 +1,18 @@
+ Desbloqueo medidas
+ call function 'DEQUEUE_E_GRRMRESP'
+    exporting
+      guid = iv_guid.
+      
+IDs de API
+cl_grfn_objtype_info=>parse_id(
+                             exporting iv_object_id = lv_parent
+                             importing ev_objtype   = ls_risk_data-parent_objtype
+                                       ev_objid     = ls_risk_data-parent_id ).
+
+cl_grfn_api_ident=>get_objid( is_risk_data-crisk_id ).
+
+-HRP1001:
+CUANDO SE HACEN RELACIONES CON LA HRP1001 , SE TIENE QUE HACER CON LA FECHA DEL OBJETO MÁS LEJANA, NO LA ACTUAL
+
+
+
