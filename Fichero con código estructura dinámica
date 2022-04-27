@@ -1,0 +1,2331 @@
+*&---------------------------------------------------------------------*
+*& Report ZGRC_UPLOAD_LOC_RISK
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT ZGRC_UPLOAD_LOC_RISK.
+
+INCLUDE zgrc_upload_loc_risk_top.
+INCLUDE zgrc_upload_loc_risk_sel.
+INCLUDE zgrc_upload_loc_risk_sbr.
+
+*** AYUDA CAMPOS
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR: p_input.
+  PERFORM f_ayuda CHANGING p_input.
+*** AYUDA CAMPOS
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR: p_rel.
+  PERFORM f_ayuda CHANGING p_rel.
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR: p_med.
+  PERFORM f_ayuda CHANGING p_med.
+
+*** LÓGICA PRINCIPAL
+START-OF-SELECTION.
+  PERFORM f_main.
+
+
+
+*&---------------------------------------------------------------------*
+*& Include          ZGRC_UPLOAD_LOC_RISK_TOP
+*&---------------------------------------------------------------------*
+
+
+   CONSTANTS: gc_infinity         TYPE dats VALUE '99991231',
+              gc_risk_local(2)    TYPE c VALUE 'OF',
+              gc_risk_lib(2)      TYPE c VALUE 'O1',
+              gc_risk_type(2)     TYPE c VALUE 'O0',
+              gc_orgunit(1)       TYPE c VALUE 'O',
+              gc_zp(2)            TYPE c VALUE 'ZP',
+              gc_noparent         TYPE grfn_api_object_id VALUE '',
+              gc_prefix_actvt     TYPE string VALUE 'CACTIVITY/',
+              gc_prefix_orgunit   TYPE string VALUE 'ORGUNIT/',
+              gc_prefix_cgroup    TYPE string VALUE 'CRGROUP/',
+              gc_prefix_crisk     TYPE string VALUE 'CRISK/',
+              gc_espanol          TYPE spras VALUE 'S',
+              gc_ingles           TYPE spras VALUE 'E',
+              gc_turco            TYPE spras VALUE 'T',
+              gc_plvar            TYPE plvar VALUE '01',
+              "TIPOS DE FICHEROS
+              gc_regulacion(10)   TYPE c VALUE 'REGULACION',
+              gc_producto(10)     TYPE c VALUE 'PRODUCTO',
+              gc_canal(10)        TYPE c VALUE 'CANAL',
+              gc_segmento(10)     TYPE c VALUE 'SEGMENTO',
+              gc_activo(10)       TYPE c VALUE 'ACTIVO',
+              gc_proveedor(10)    TYPE c VALUE 'PROVEEDOR',
+
+              gc_act_regulacion(2) TYPE c VALUE 'Z1',
+              gc_act_producto(2)   TYPE c VALUE 'Z2',
+              gc_act_canal(2)      TYPE c VALUE 'Z3',
+              gc_act_segmento(2)   TYPE c VALUE 'Z4',
+              gc_act_activo(2)     TYPE c VALUE 'Z5',
+              gc_act_proveedor(2)  TYPE c VALUE 'Z6',
+              gc_jerarquia(2)      TYPE c VALUE 'O7',
+              """
+              gc_separador_csv(1) TYPE c VALUE '~',
+              gc_subty            TYPE subtyp VALUE 'ZDOF',
+              gc_infty            TYPE infotyp VALUE '9700'.
+
+   TYPES: gtty_header TYPE STANDARD TABLE OF string,
+          BEGIN OF gty_rel_file,
+            risk_id               TYPE string,
+            tipo                  TYPE string,
+            id                    TYPE zgrc_de_cod_ext,
+          END OF gty_rel_file,
+          gtty_rel_file TYPE STANDARD TABLE OF gty_rel_file,
+          BEGIN OF gty_medida_file,
+            risk_id               TYPE string,               "ÍNDICE DEL RIESGO LOCAL EN EL FICHERO
+            modelo_cod_bbva       TYPE zgrc_de_cod_ext,      "CÓDIGO DEL MODELO DE MEDIDA, si existe o no medidas creadas en el mismo, si existen se asignan, sino se crean
+*             name                  TYPE string,    "HEREDA O CREA DESDE EL FICHERO
+*            desc                  TYPE string,    "HEREDA O CREA DESDE EL FICHERO
+*            name_en                TYPE string,   "HEREDA O CREA DESDE EL FICHERO
+*            name_tc                TYPE string,   "HEREDA O CREA DESDE EL FICHERO
+*            desc_en                TYPE string,   "HEREDA O CREA DESDE EL FICHERO
+*            desc_tc                TYPE string,   "HEREDA O CREA DESDE EL FICHERO
+*            EFFECTIVE_FROM         type string,          "evectivo hasta
+*            EFFECTIVE_TO           type string,           "evectivo desde
+*            RESP_EFFECT_LVL        type string,          "funcionamiento
+            zzdesc_ext             TYPE string,       "descripción extendida
+            zzevidencia_control    TYPE string, "evidencia de control
+            zzfrecuencia           TYPE string, "frecuencia
+            zzuo                   TYPE zgrc_de_cod_ext,"uo  NO SE HEREDA
+            zzrcs                  TYPE string, "RCS NO SE HEREDA
+            zztipo_control         TYPE string, "tipo de control
+            zzcontrol_ext          TYPE string, "control externalizado/
+            zzunid_ext_control     TYPE string, "unidad externalizada de control
+            zzresponsable_control  TYPE string, "responsable del control
+            zzcomentario_evidencia_contrl TYPE string, "evidencia de control
+***         campos que se heredan
+            zzmodo_mitigacion      TYPE string, " modo mitigación  SE PUEDE HEREDAR Y SINO SE CREA DESDE EL FICHERO
+            zznaturaleza           TYPE string, "naturaleza         SE PUEDE HEREDAR Y SINO SE CREA DESDE EL FICHERO
+            zzelement_modelo       TYPE string,   "elemento del modelo  SE PUEDE HEREDAR Y SINO SE CREA DESDE EL FICHERO
+***
+          END OF gty_medida_file,
+          gtty_medida_file TYPE STANDARD TABLE OF gty_medida_file,
+          BEGIN OF gty_data_file,
+            line TYPE string,
+          END OF gty_data_file,
+          gtty_data_file TYPE STANDARD TABLE OF gty_data_file,
+
+
+
+          BEGIN OF gty_logger,
+            ln_name    TYPE string,
+            err_code   TYPE i,
+            err_string TYPE string,
+          END OF gty_logger,
+          gtty_logger TYPE STANDARD TABLE OF gty_logger,
+
+          gty_tb_0056     TYPE zgrc_tb_0056,
+          gtty_tb_0056    TYPE STANDARD TABLE OF gty_tb_0056,
+
+          BEGIN OF gty_hrp9700,
+*            zzsox                TYPE zgrc_de_sox,
+            zzgestionrisk        TYPE zgrc_de_gestion_risk,
+            zzid_zp              TYPE hrobjid,
+            zzcreated_iniciative TYPE zgrc_de_created_by_iniciative,
+****         cdf hrp9500
+*            ZZIMPACTO            type ZGRC_DE_IMPACTO,
+*            ZZNIVEL_IMP_REP       type ZGRC_DE_NIVEL_IMP_REP,
+*            ZZVALORACION         type ZGRC_DE_VALORACION,
+          END OF gty_hrp9700,
+          gty_hrp1001  TYPE hrp1001,
+          gtty_hrp1001 TYPE STANDARD TABLE OF gty_hrp1001,
+          BEGIN OF gty_hrp1002,
+            subty TYPE subtyp,
+          END OF gty_hrp1002,
+          "TIPOS PARA LA CREACIÓN DEL RIESGO LOCAL A TRAVÉS DE LOS APIS
+          BEGIN OF gty_consulta,
+            risk_id          TYPE          zgrc_de_cod_ext,
+            risk_category_id TYPE          zgrc_de_cod_ext,           "CRGROUP/50106746                                 “Risk type heredado del riesgo librería (Podría ponerse uno nuevo de entrada)
+            objective_id     TYPE          zgrc_de_cod_ext,           "                                                         "Posiblemente Actividad, no se sabe si es heredada (Podría ponerse uno nuevo de entrada)
+            orgunit_id       TYPE          zgrc_de_cod_ext,           "ORGUNIT/50000003                                                “Unidad organizativa de entrada
+            orgunit_id2      TYPE          zgrc_de_cod_ext,
+            crisk_id         TYPE          hrobjid,           "CRISK/50106906                                                       “Riesgo librería de entrada
+            zzid_zp          TYPE          zgrc_de_cod_ext,           "código BBVA de ZP
+            name             TYPE          grfn_title,
+            desc             TYPE          grfn_text,
+            name_en          TYPE          grfn_title,
+            desc_en          TYPE          grfn_text,
+            name_tc          TYPE          grfn_title,
+            desc_tc          TYPE          grfn_text,
+          END OF gty_consulta,
+          gtty_consulta TYPE STANDARD TABLE OF gty_consulta,
+          BEGIN OF gty_objid_hrp9700,   " ID RIESGO LOCAL
+            objid TYPE hrobjid,
+          END OF gty_objid_hrp9700,
+          gtty_objid_hrp9700 TYPE STANDARD TABLE OF gty_objid_hrp9700,
+          BEGIN OF gty_hrp9800,   " ZP
+            objid     TYPE hrobjid,
+            zzcod_ext TYPE zgrc_de_cod_ext,
+          END OF gty_hrp9800,
+          gtty_hrp9800 TYPE STANDARD TABLE OF gty_hrp9800,
+*          BEGIN OF gty_COD_9800,   " ZP
+*            ZZID_ZP      TYPE zgrc_de_cod_ext,
+*          END OF gty_COD_9800,
+*          gtty_COD_9800 type STANDARD TABLE OF gty_COD_9800,
+          "ORGANIZACIONES
+          BEGIN OF gty_hrp9103,
+            objid        TYPE hrobjid,
+            zzcod_ext_ln TYPE zgrc_de_cod_ext,
+          END OF gty_hrp9103,
+          gtty_hrp9103 TYPE STANDARD TABLE OF gty_hrp9103,
+          "crisk
+          BEGIN OF gty_hrp9105,
+            objid          TYPE hrobjid,
+            zzcod_ext_risk TYPE zgrc_de_cod_ext,
+          END OF gty_hrp9105,
+          gtty_hrp9105 TYPE STANDARD TABLE OF gty_hrp9105,
+          BEGIN OF gty_hrp9104,
+            objid        TYPE hrobjid,
+            zzcod_ext_uo TYPE zgrc_de_cod_ext,
+          END OF gty_hrp9104,
+          gtty_hrp9104 TYPE STANDARD TABLE OF gty_hrp9104,
+          "segmentos
+          BEGIN OF gty_hrp9905,
+            objid        TYPE hrobjid,
+            zzcod_ext_07 TYPE zgrc_de_cod_ext,
+          END OF gty_hrp9905,
+          gtty_hrp9905 TYPE STANDARD TABLE OF gty_hrp9905,
+          "medidas
+           BEGIN OF gty_hrp9400,
+            objid        TYPE hrobjid,
+            zzcod_ext_o6 TYPE zgrc_de_cod_ext,
+          END OF gty_hrp9400,
+          gtty_hrp9400 TYPE STANDARD TABLE OF gty_hrp9400,
+          gty_hrp9600  TYPE hrp9600,  "riesgos librería CRISK
+          gtty_hrp9600 TYPE STANDARD TABLE OF gty_hrp9600,
+          gtt_crisk    TYPE STANDARD TABLE OF hrp9600-objid,
+          gty_tb_0052    TYPE zgrc_tb_0052,
+          gtty_tb_0052   TYPE STANDARD TABLE OF gty_tb_0052,
+***         CÓDIGO BBVA DEL HRP9905 Y TIPO DE CATEGORÍA HRP1847
+          BEGIN OF gty_categoria,
+            objid            TYPE hrobjid,
+            zzcod_ext_07     TYPE zgrc_de_cod_ext,
+            activity_type_id TYPE grrm_activity_type_id,
+          END OF gty_categoria,
+          gtty_categoria TYPE STANDARD TABLE OF gty_categoria.
+
+
+
+*&---------------------------------------------------------------------*
+*& Include          ZGRC_UPLOAD_LOC_RISK_SCR
+*&---------------------------------------------------------------------*
+
+SELECTION-SCREEN BEGIN OF BLOCK b1.
+PARAMETERS: p_input(128)   TYPE c LOWER CASE.
+PARAMETERS: p_rel(128)     TYPE c LOWER CASE.
+PARAMETERS: p_med(128)     TYPE c LOWER CASE.
+
+SELECTION-SCREEN END OF BLOCK b1.
+
+
+
+*&---------------------------------------------------------------------*
+*& Include          ZGRC_UPLOAD_LOC_RISK_SBR
+*& Subrutinas
+*& Deloitte Advisory S.L
+*& Fecha: 07/09/2020
+*&---------------------------------------------------------------------*
+
+
+FORM f_upload_from_gui USING pv_filename  TYPE char128
+                    CHANGING pt_data_file TYPE gtty_data_file.
+
+  DATA: lv_filename TYPE string.
+
+  CLEAR: pt_data_file[].
+
+  IF pv_filename IS NOT INITIAL.
+    lv_filename = pv_filename.
+
+    CALL FUNCTION 'GUI_UPLOAD'
+      EXPORTING
+        filename                = lv_filename
+      TABLES
+        data_tab                = pt_data_file
+      EXCEPTIONS
+        file_open_error         = 1
+        file_read_error         = 2
+        no_batch                = 3
+        gui_refuse_filetransfer = 4
+        invalid_type            = 5
+        no_authority            = 6
+        unknown_error           = 7
+        bad_data_format         = 8
+        header_not_allowed      = 9
+        separator_not_allowed   = 10
+        header_too_long         = 11
+        unknown_dp_error        = 12
+        access_denied           = 13
+        dp_out_of_memory        = 14
+        disk_full               = 15
+        dp_timeout              = 16
+        OTHERS                  = 17.
+  ENDIF.
+
+ENDFORM.
+
+* Subrutina para procesar la creacion de los datos importados del fichero CSV
+* La estructura de la cabecera será dinámica, no de campos fijos porque se desconoce su longitud, se parametrizarán los nombres en la tabla ZGRC_TB_0056
+FORM f_process_file CHANGING pt_data_file  TYPE gtty_data_file
+                             pt_logger     TYPE gtty_logger
+                             pt_tb_0056    TYPE gtty_tb_0056
+                             pt_dyn_table  TYPE REF TO data
+                             pt_dyn_fcat   TYPE lvc_t_fcat.
+
+  CONSTANTS: lc_token TYPE string VALUE '~'.
+
+  DATA: "lt_data_input TYPE gtty_data_input,
+    "ls_data_input TYPE gty_data_input,
+    lv_counter TYPE i VALUE '1',
+    lv_resto   TYPE string,
+    lv_orgunit TYPE hrobjid.
+  DATA :
+    lw_line     TYPE REF TO data,
+    lw_dyn_fcat TYPE lvc_s_fcat.
+  FIELD-SYMBOLS: <fs_line>,
+                 <fs_dyn_table> TYPE STANDARD TABLE,
+                 <fs1>,
+                 <fs_comp>      TYPE any.
+
+  CLEAR: lv_resto, lv_orgunit, pt_logger[].
+
+* Creo el puntero para la tabla a tratar
+  ASSIGN pt_dyn_table->* TO <fs_dyn_table>.
+* creo el work area/estructura para ir agregando a la tabla dinámica
+  CREATE DATA lw_line LIKE LINE OF <fs_dyn_table>.
+  ASSIGN lw_line->* TO <fs_line>.
+
+*   Agrego los datos del fichero a mi tabla para guardar en infotipos y tabla
+  LOOP AT pt_data_file ASSIGNING FIELD-SYMBOL(<fs_data_file>).
+*    CLEAR ls_data_input.
+
+    IF sy-tabix NE 1.
+      "le agrego los valores campo por campo según el orden de las columnas
+      SPLIT <fs_data_file>-line AT lc_token INTO TABLE DATA(lt_campos). "lw_line.
+      LOOP AT lt_campos ASSIGNING FIELD-SYMBOL(<fs_campos>).
+        ASSIGN COMPONENT sy-tabix OF STRUCTURE <fs_line> TO <fs_comp>.
+        <fs_comp> = <fs_campos>.
+      ENDLOOP.
+      APPEND <fs_line> TO <fs_dyn_table>.
+
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+
+* Subrutinas para guardar el log de errores en fichero interno
+FORM f_add_log_line USING pv_role_name  TYPE grfn_title
+                          pv_log_line   TYPE string
+                 CHANGING pt_logger     TYPE gtty_logger.
+
+  CLEAR: pt_logger[].
+
+  pt_logger = VALUE #( ( ln_name = pv_role_name err_code = '1' err_string = pv_log_line ) ).
+  PERFORM f_write_logger USING pv_log_line.
+
+ENDFORM.
+
+FORM f_write_logger USING pv_log_line.
+
+  DATA: lv_fname    TYPE string VALUE 'UPLOAD-LOCAL-RISK.LOG',
+        lv_path     TYPE dirname_al11 VALUE 'DIR_LOGGING',
+        lv_fullpath TYPE string.
+
+  CALL 'C_SAPGPARAM' ID 'NAME' FIELD 'DIR_LOGGING' ID 'VALUE' FIELD lv_path. "TO CHANGE TO THE REAL PATH
+
+  CONCATENATE lv_path lv_fname INTO lv_fullpath SEPARATED BY '/'.
+  "I know that opening and closing the file is too much stress, but loggers need to write every line in runtime
+  OPEN DATASET lv_fullpath FOR APPENDING IN TEXT MODE ENCODING DEFAULT.
+  TRANSFER pv_log_line TO lv_fullpath.
+  CLOSE DATASET lv_fullpath.
+
+ENDFORM.
+
+* Subrutina para crear la actividad en español
+FORM f_create_esp USING ps_add_line TYPE grrm_s_api_cactivity_data
+               CHANGING pv_objid    TYPE grpc_api_object_id.
+
+  DATA: lo_session TYPE REF TO cl_grfn_api_session.
+
+  TRY.
+      CALL METHOD cl_grfn_api_session=>open_daily
+        EXPORTING
+          iv_language = gc_espanol
+        RECEIVING
+          ro_instance = lo_session.
+
+* Se crea la actividad en español
+      CALL METHOD cl_grrm_api_cactivity=>if_grrm_api_cactivity~create
+        EXPORTING
+          is_cactivity_data = ps_add_line
+          io_session        = lo_session
+        IMPORTING
+          ev_cactivity_id   = pv_objid.
+
+      lo_session->save( ).
+      lo_session->close( ).
+    CATCH cx_grfn_exception.
+  ENDTRY.
+
+ENDFORM.
+
+* Subrutina para rellenar infotipo infotipos de descripción extendida
+FORM f_save_desc USING pv_desc_l TYPE string
+                       pv_objid  TYPE grpc_api_object_id
+                       pc_idioma TYPE spras.
+
+
+  DATA: lt_texto TYPE STANDARD TABLE OF pt1002,
+        lv_objid TYPE hrobjid,
+        lv_resto TYPE string,
+        lv_char  TYPE i,
+        lv_num   TYPE i VALUE '0',
+        lv_div   TYPE i,
+        lv_rest  TYPE i.
+
+  CLEAR: lt_texto[], lv_objid, lv_resto, lv_char, lv_num, lv_div, lv_rest.
+
+  lv_char = strlen( pv_desc_l ).
+
+* Si la descripción larga tiene más de 72 caracteres, se inserta la descripción en la tabla lt_texto en lineas de 72 caracteres
+  IF lv_char GT 72.
+    lv_div  = lv_char DIV 72.
+    lv_rest = lv_char MOD 72.
+
+    DO lv_div TIMES.
+      lt_texto = VALUE #( BASE lt_texto ( tline = pv_desc_l+lv_num(72) ) ).
+      lv_num = lv_num + 72.
+    ENDDO.
+
+    IF lv_rest NE 0.
+      lt_texto = VALUE #( BASE lt_texto ( tline = pv_desc_l+lv_num(lv_rest) ) ).
+    ENDIF.
+
+* Si la descripción larga tiene menos o 72 caracteres, se inserta la descripción en la tabla lt_texto en una sola linea de 72 caracteres
+  ELSE.
+    lt_texto = VALUE #( BASE lt_texto ( tline = pv_desc_l ) ).
+  ENDIF.
+
+  SPLIT pv_objid AT '/' INTO lv_resto lv_objid.
+
+  CALL FUNCTION 'RH_OBJECT_DESCRIPTION_WRITE'
+    EXPORTING
+      langu                = pc_idioma
+      plvar                = gc_plvar
+      otype                = gc_risk_local
+      objid                = lv_objid
+      begda                = sy-datum
+      endda                = gc_infinity
+      subty                = gc_subty
+    TABLES
+      ptxt1002             = lt_texto
+    EXCEPTIONS
+      object_not_found     = 1
+      description_required = 2
+      no_authority         = 3
+      error_during_insert  = 4
+      invalid_date         = 5
+      undefined            = 6
+      OTHERS               = 7.
+
+  IF sy-subrc EQ 0.
+    COMMIT WORK.
+  ENDIF.
+
+ENDFORM.
+
+** Subrutina para rellenar datos del objeto en otros idiomas
+*FORM f_create_noes USING ps_data_input  TYPE gty_data_input
+*                         pv_objid       TYPE grpc_api_object_id
+*                         pv_language    TYPE spras.
+*
+*  DATA: lo_session TYPE REF TO cl_grfn_api_session,
+*        lo_actvt   TYPE REF TO cl_grrm_api_cactivity,
+*        ls_data    TYPE grrm_s_api_cactivity_data.
+*
+*  CLEAR: ls_data, lo_session, lo_actvt.
+*
+** Se abre la sesión en inglés
+*  CALL METHOD cl_grfn_api_session=>open_daily
+*    EXPORTING
+*      iv_language = pv_language
+*    RECEIVING
+*      ro_instance = lo_session.
+*
+*  CREATE OBJECT lo_actvt
+*    EXPORTING
+*      i_object_id = pv_objid
+*      io_session  = lo_session.
+*
+*  TRY.
+*      CALL METHOD lo_actvt->if_grrm_api_cactivity~retrieve
+*        EXPORTING
+*          iv_editable       = abap_true
+*        IMPORTING
+*          es_cactivity_data = ls_data.
+*
+** Se modifican los datos en el idioma correspondiente
+*      IF pv_language EQ gc_ingles.
+*        ls_data = VALUE #( BASE ls_data cactivity_title = ps_data_input-name_en descr = ps_data_input-desc_en ).
+*
+*      ELSEIF pv_language EQ gc_turco.
+*        ls_data = VALUE #( BASE ls_data cactivity_title = ps_data_input-name_tc descr = ps_data_input-desc_tc ).
+*      ENDIF.
+*
+*      CALL METHOD lo_actvt->if_grrm_api_cactivity~update EXPORTING is_cactivity_data = ls_data.
+*
+*      lo_session->save( ).
+*      lo_session->close( ).
+*    CATCH cx_grfn_exception.
+*  ENDTRY.
+*
+*ENDFORM.
+
+*Subrutina para cargar infotipos
+FORM f_add_infotype USING pc_infty   TYPE infotyp
+                          pv_objid   TYPE grpc_api_object_id
+                          ps_hrp_add TYPE gty_hrp9700.
+*                          pv_enddate TYPE dats.
+
+  DATA: lt_org_tab  TYPE TABLE OF pplog.
+
+  CLEAR: lt_org_tab[].
+
+  lt_org_tab = VALUE #( ( plvar = gc_plvar
+                          subty = gc_subty
+                          istat = '1'
+                          otype = gc_risk_local
+                          infty = pc_infty
+                          begda = sy-datum
+*                          endda = pv_enddate
+                          endda = gc_infinity
+                          objid = pv_objid
+                          vdata = ps_hrp_add ) ).
+
+  CALL FUNCTION 'RH_INSERT_INFTY'
+    EXPORTING
+      vtask               = 'V'
+      authy               = abap_true
+    TABLES
+      innnn               = lt_org_tab
+    EXCEPTIONS
+      no_authorization    = 1
+      error_during_insert = 2
+      repid_form_initial  = 3
+      corr_exit           = 4
+      begda_greater_endda = 5
+      OTHERS              = 6.
+
+  IF sy-subrc EQ 0.
+    COMMIT WORK.
+  ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form F_AYUDA
+*&---------------------------------------------------------------------*
+FORM f_ayuda CHANGING pv_value TYPE char128.
+
+  CALL FUNCTION 'KD_GET_FILENAME_ON_F4'
+    EXPORTING
+      static    = abap_true
+    CHANGING
+      file_name = pv_value.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form F_MAIN
+*&---------------------------------------------------------------------*
+FORM  f_main .
+
+  DATA: lt_data_file       TYPE gtty_data_file,
+        lt_data_relaciones TYPE gtty_data_file,
+        lt_data_medidas    TYPE gtty_data_file,
+        lt_relaciones      TYPE gtty_rel_file,
+        lt_medidas         TYPE gtty_medida_file,
+        lt_logger          TYPE gtty_logger,
+        lt_header_fields   TYPE gtty_header,
+        lt_tb_0056         TYPE gtty_tb_0056.
+  DATA: lt_dyn_table TYPE REF TO data,
+        lt_dyn_fcat  TYPE lvc_t_fcat.
+
+*** Riesgos
+  PERFORM f_upload_from_gui        USING    p_input
+                                   CHANGING lt_data_file.
+***  Relaciones
+  PERFORM f_upload_from_gui        USING    p_rel
+                                   CHANGING lt_data_relaciones.
+***  Medidas
+  PERFORM f_upload_from_gui        USING    p_med
+                                   CHANGING lt_data_medidas.
+
+  "genero mi tabla con los cod_bbva de las relaciones
+  PERFORM f_get_data_relaciones    USING    lt_data_relaciones
+                                            lt_relaciones.
+  "genero mi tabla con los cod_bbva de las medidas
+  PERFORM f_get_data_medidas    USING    lt_data_medidas
+                                         lt_medidas.
+  "cabecera del fichero de riesgos locales
+  PERFORM f_get_header             CHANGING lt_data_file
+                                            lt_header_fields.
+  "tabla de parametrización del fichero riesgos locales
+  PERFORM f_get_customizing_fields CHANGING lt_tb_0056 .
+*                                            lt_header_fields.
+  "creo tabla dinámica con cabecera parametrizada de riesgos locales
+  PERFORM f_create_dynamic_table   USING    lt_tb_0056
+                                            lt_header_fields
+                                   CHANGING lt_dyn_table
+                                            lt_dyn_fcat
+                                            lt_logger.
+
+  PERFORM f_process_file           CHANGING lt_data_file
+                                            lt_logger
+                                            lt_tb_0056
+                                            lt_dyn_table
+                                            lt_dyn_fcat.
+
+  "creo el riesgo con el resto de ficheros
+  PERFORM f_create_risk            USING    lt_dyn_table
+                                            lt_dyn_fcat
+                                            lt_relaciones
+                                            lt_medidas
+                                   CHANGING "lt_data_input
+                                            lt_logger.
+
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_NOEXISTE
+*&---------------------------------------------------------------------*
+FORM f_message_noexiste USING pv_nombre_riesgo
+                              pv_parte2
+                     CHANGING pv_log_line TYPE string.
+
+  MESSAGE s224(zgrc_wd_msg) WITH pv_nombre_riesgo pv_parte2 INTO pv_log_line.
+
+ENDFORM.
+
+FORM f_message_no_relation USING pv_risk_id
+                                 pv_zzid
+                                 pv_tipo
+                     CHANGING pv_log_line TYPE string.
+  CASE pv_tipo.
+    WHEN 'ZP'.
+      "no se ha podido crear la relación entre Riesgo local y ZP
+*       MESSAGE s226(zgrc_wd_msg) WITH pv_risk_id pv_zzid_zp INTO pv_log_line.
+    WHEN OTHERS.
+      MESSAGE s226(zgrc_wd_msg) WITH pv_risk_id pv_tipo pv_zzid INTO pv_log_line.
+  ENDCASE.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_NOUNIVOCO
+*&---------------------------------------------------------------------*
+FORM f_message_nounivoco USING pv_nombre
+                               pv_cod_bbva
+                      CHANGING pv_log_line TYPE string.
+
+  MESSAGE s067(zgrc_wd_msg) INTO DATA(lv_message1).
+  MESSAGE s068(zgrc_wd_msg) INTO DATA(lv_message2).
+  MESSAGE s225(zgrc_wd_msg) WITH pv_nombre lv_message1 pv_cod_bbva lv_message2 INTO pv_log_line.
+
+ENDFORM.
+
+
+FORM f_get_header CHANGING   pt_data_file      TYPE gtty_data_file
+                             pt_header_fields  TYPE gtty_header.
+
+  CONSTANTS: lc_token TYPE string VALUE '~'.
+  "Obtengo la primera línea que sería la cabecera del fichero
+  READ TABLE pt_data_file ASSIGNING FIELD-SYMBOL(<lfs_data_file>) INDEX 1.
+  IF sy-subrc EQ 0.
+    SPLIT <lfs_data_file>-line AT lc_token INTO TABLE pt_header_fields.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_GET_CUSTOMIZING_FIELDS
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      <-- LT_TB_0056
+*&---------------------------------------------------------------------*
+FORM f_get_customizing_fields  CHANGING pt_tb_0056       TYPE gtty_tb_0056.
+*                                        pt_header_fields TYPE gtty_header.
+  "consulta a tabla de parametrización de campos
+  SELECT *
+    FROM zgrc_tb_0056
+*    FOR ALL ENTRIES IN @pt_header_fields
+    WHERE programa EQ 'ZGRC_UPLOAD_LOC_RISK'
+*          AND valor EQ @pt_header_fields
+    INTO TABLE @pt_tb_0056.                                      .
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_CREATE_DYNAMIC_TABLE
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LT_TB_0056
+*&      <-- LT_HEADER_FIELDS
+*&---------------------------------------------------------------------*
+FORM f_create_dynamic_table  USING    pt_tb_0056        TYPE gtty_tb_0056
+                                      pt_header_fields  TYPE gtty_header
+                             CHANGING pt_dyn_table      TYPE REF TO data
+                                      pt_dyn_fcat       TYPE lvc_t_fcat
+                                      pt_logger         TYPE gtty_logger.
+
+* Dynamic Table Declarations
+
+  DATA :
+*       gt_dyn_table TYPE REF TO data,
+    gw_line     TYPE REF TO data,
+    gw_line1    TYPE REF TO data,
+    lw_dyn_fcat TYPE lvc_s_fcat.
+*       gt_dyn_fcat  TYPE lvc_t_fcat.
+
+* declaración de los Field Symbols de tabla y línea de tabla dinámica
+
+  FIELD-SYMBOLS: <gfs_line>,<gfs_line1>,
+                 <gfs_dyn_table> TYPE STANDARD TABLE,
+                 <fs1>.
+  DATA: lv_log_line TYPE string,
+        lv_campo    TYPE grfn_title,
+        lv_valor    TYPE string.
+
+*** recorro mis campos de la cabecera del fichero
+  LOOP AT pt_header_fields INTO DATA(ls_hf).
+    CLEAR lw_dyn_fcat.
+    lv_valor = ls_hf.
+    TRANSLATE lv_valor TO UPPER CASE.
+*** obtengo el la información correspondiente de la cabecera en la tabla de parametrización de campos
+    READ TABLE pt_tb_0056 INTO DATA(ls_0056) WITH KEY valor = lv_valor.
+    "si el campo no está parametrizado, lanza un error y continúa con el siguiente
+    IF sy-subrc NE 0.
+      PERFORM f_message_parametrizacion USING lv_valor CHANGING lv_log_line.
+      lv_campo = 'Parametrización ' &&  lv_valor.
+      PERFORM f_add_log_line USING lv_campo lv_log_line CHANGING pt_logger.
+      CONTINUE.
+    ENDIF.
+    "por si está repetido en la tabla de parametrización
+    READ TABLE pt_dyn_fcat INTO lw_dyn_fcat WITH KEY fieldname = ls_0056-nombre.
+    IF sy-subrc NE 0.
+      lw_dyn_fcat-fieldname = ls_0056-nombre.
+      lw_dyn_fcat-tabname   = 'it_input'.
+      lw_dyn_fcat-coltext   = ls_0056-valor.
+      lw_dyn_fcat-outputlen = 100.
+      lw_dyn_fcat-col_pos   = sy-tabix.
+      APPEND lw_dyn_fcat TO pt_dyn_fcat.
+    ENDIF.
+  ENDLOOP.
+
+
+** crea la tabla dinámica con la estructura formada a partir de la tabla de parametrización
+  CALL METHOD cl_alv_table_create=>create_dynamic_table
+    EXPORTING
+      i_style_table             = 'x'
+      it_fieldcatalog           = pt_dyn_fcat
+    IMPORTING
+      ep_table                  = pt_dyn_table
+    EXCEPTIONS
+      generate_subpool_dir_full = 1
+      OTHERS                    = 2.
+
+*  IF sy-subrc EQ 0.
+* Assign the new table to field symbol
+*    ASSIGN gt_dyn_table->* TO <gfs_dyn_table>.
+** Create dynamic work area for the dynamic table
+*    CREATE DATA gw_line LIKE LINE OF <gfs_dyn_table>.
+*    CREATE DATA gw_line1 LIKE LINE OF <gfs_dyn_table>.
+*    ASSIGN gw_line->* TO <gfs_line>.
+*    ASSIGN gw_line1->* TO <gfs_line1>.
+*  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_CREATE_RISK
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LT_DATA_INPUT
+*&      --> LT_LOGGER
+*&      --> LT_DYN_TABLE
+*&      --> LT_DYN_FCAT
+*&---------------------------------------------------------------------*
+FORM f_create_risk  USING      pt_dyn_table       TYPE REF TO data
+                               pt_dyn_fcat        TYPE lvc_t_fcat
+                               pt_relaciones      TYPE gtty_rel_file
+                               pt_medidas         TYPE gtty_medida_file
+                    CHANGING   "pt_data_input  TYPE gtty_data_input
+                               pt_logger          TYPE gtty_logger.
+
+  "Estructuras para crear el riesgo
+  DATA: ls_data_line      TYPE grrm_s_api_risk_data,
+        lt_data_line      TYPE STANDARD TABLE OF grrm_s_api_risk_data,
+        ls_attr_line      TYPE grrm_s_api_risk_attr,
+        ls_status_line    TYPE grrm_s_api_risk_status,
+        ls_crisk          TYPE grrm_s_api_crisk_data,
+        lt_impact         TYPE grrm_t_api_impact,
+        lt_driver         TYPE grrm_t_api_driver,
+        lt_no_medibles    TYPE gtty_tb_0052,
+        lt_crisk_cdfs     TYPE grfn_t_api_customfield_data,
+        lt_risk_cdfs      TYPE grfn_t_api_customfield_data,
+
+        ls_hrp9700_add    TYPE gty_hrp9700,
+        lt_hrp9700_add    TYPE STANDARD TABLE OF gty_hrp9700,
+        lt_objid_9700     TYPE gtty_objid_hrp9700,
+        lt_objid_9800     TYPE gtty_hrp9800,
+        ls_objid_9800     TYPE gty_hrp9800,
+        lt_objid_9105     TYPE gtty_hrp9105,
+        ls_objid_9105     TYPE gty_hrp9105,
+        lt_objid_9104     TYPE gtty_hrp9104,
+        lt_objid_9104_sec TYPE gtty_hrp9104,
+        ls_objid_9104     TYPE gty_hrp9104,
+        lt_objid_9905     TYPE gtty_hrp9905,
+        lt_objid_9400     TYPE gtty_hrp9400, "RESP_TEMPLATE
+        lt_hrp1001        TYPE gtty_hrp1001,
+        ls_consulta       TYPE gty_consulta,
+        lt_consulta       TYPE gtty_consulta,
+        lt_objid_9103     TYPE gtty_hrp9103,
+        lt_objid_9103_med TYPE gtty_hrp9103,
+        lt_resp_template  TYPE gtty_hrp9400,
+***     categorías que trae el fichero de relaciones
+        lt_categorias     TYPE gtty_categoria.
+
+  DATA: lv_objid_crisk TYPE hrobjid,
+        lv_objid       TYPE grfn_api_object_id,
+        lv_create      TYPE char1,
+        lv_log_line    TYPE string,
+        lv_day,
+        lv_descr_l     TYPE string.
+
+  DATA :
+      lw_line     TYPE REF TO data.
+  FIELD-SYMBOLS: <fs_line>,
+                 <fs_dyn_table>       TYPE STANDARD TABLE,
+                 <fs_campo>,
+                 <fs_campo_consulta>,
+                 <fs_campo_data_line>,
+                 <fs_campo_hrp9700>,
+                 <fs_comp>            TYPE any.
+
+* Creo el puntero para la tabla a tratar
+  ASSIGN pt_dyn_table->* TO <fs_dyn_table>.
+* creo el work area/estructura para ir agregando a la tabla dinámica
+  CREATE DATA lw_line LIKE LINE OF <fs_dyn_table>.
+
+* Día actual
+  CONCATENATE sy-datum+6(2) sy-datum+4(2) sy-datum(4) INTO lv_day SEPARATED BY '/'.
+
+  LOOP AT <fs_dyn_table> ASSIGNING FIELD-SYMBOL(<fs_dyn_line>).
+    CLEAR ls_consulta.
+*    move <fs_dyn_line> to <fs_line>.
+    LOOP AT pt_dyn_fcat INTO DATA(ls_dyn_cat).
+      ASSIGN COMPONENT ls_dyn_cat-fieldname OF STRUCTURE <fs_dyn_line> TO <fs_campo>.
+
+      ASSIGN COMPONENT ls_dyn_cat-fieldname OF STRUCTURE ls_consulta TO <fs_campo_consulta>.
+      IF sy-subrc EQ 0
+            AND <fs_campo> IS ASSIGNED.
+        MOVE <fs_campo> TO <fs_campo_consulta>.
+        UNASSIGN <fs_campo_consulta>.
+      ENDIF.
+
+      ASSIGN COMPONENT ls_dyn_cat-fieldname OF STRUCTURE ls_data_line TO <fs_campo_data_line>.
+      IF sy-subrc EQ 0
+            AND <fs_campo_data_line> IS ASSIGNED.
+        MOVE <fs_campo> TO <fs_campo_data_line>.
+        UNASSIGN <fs_campo_data_line>.
+      ENDIF.
+
+      ASSIGN COMPONENT ls_dyn_cat-fieldname OF STRUCTURE ls_hrp9700_add TO <fs_campo_hrp9700>.
+      IF sy-subrc EQ 0
+            AND <fs_campo_hrp9700> IS ASSIGNED
+            AND ls_dyn_cat-fieldname NE 'ZZID_ZP'.
+        MOVE <fs_campo> TO <fs_campo_hrp9700>.
+        UNASSIGN <fs_campo_hrp9700>.
+      ENDIF.
+      UNASSIGN <fs_campo>.
+    ENDLOOP.
+    IF ls_data_line IS NOT INITIAL.
+      APPEND ls_data_line TO lt_data_line.
+    ENDIF.
+    IF ls_hrp9700_add IS NOT INITIAL.
+      APPEND ls_hrp9700_add TO lt_hrp9700_add.
+    ENDIF.
+    IF ls_consulta IS NOT INITIAL.
+      APPEND ls_consulta TO lt_consulta.
+    ENDIF.
+  ENDLOOP.
+  "cargo las tablas con los datos a verificar
+  PERFORM f_queries_tables USING    lt_consulta
+                                    pt_medidas
+                                    pt_relaciones
+                           CHANGING  lt_objid_9800
+                                     lt_objid_9103
+                                     lt_objid_9103_med
+                                     lt_objid_9400
+                                     lt_categorias
+                                     lt_hrp1001.
+
+*** se verifica la integridad de los datos y se guardan si todo está correcto
+
+*  loop at <fs_dyn_table> assigning <fs_dyn_line>.
+  LOOP AT lt_data_line INTO ls_data_line.
+    CLEAR: "ls_data_line,
+           ls_attr_line,
+           ls_status_line,
+           ls_hrp9700_add.
+*** declaraciones e inicialización de variables
+    DATA(lv_index_data_line) = sy-tabix.
+    ls_data_line-valid_from = sy-datum.
+    ls_data_line-valid_to   = gc_infinity.
+*    move-corresponding <fs_dyn_line> to ls_data_line.
+    "el crisk será el padre del riesgo librería
+    ls_data_line-parent_id = gc_prefix_crisk && ls_data_line-crisk_id.
+*    move-CORRESPONDING <fs_dyn_line> to ls_hrp9700_add.
+    READ TABLE lt_hrp9700_add INTO ls_hrp9700_add INDEX lv_index_data_line.
+    "obtengo una tupla de la tabla consultas para obtener las descipciones del riesgo
+    READ TABLE lt_consulta INTO ls_consulta INDEX lv_index_data_line.
+***
+
+*** "guarda ids y verifica el enlace en la hrp1001
+    PERFORM f_verify_data_line USING    ls_consulta
+                                        lt_objid_9800
+                                        lt_objid_9103
+                                        lt_hrp1001
+                               CHANGING ls_hrp9700_add
+                                        ls_data_line
+                                        pt_logger .
+***creación en español
+    ls_data_line-risk_title = ls_consulta-name.
+    ls_data_line-comments   = ls_consulta-desc.
+    ls_data_line-crisk_id = gc_prefix_crisk && ls_data_line-crisk_id.
+    ls_data_line-orgunit_id = gc_prefix_orgunit && ls_data_line-orgunit_id.
+
+****    obtengo los datos del riesgo libreríam sus causas/consecuencias y las consecuencias no medibles
+    IF ls_data_line-crisk_id IS NOT INITIAL.
+              PERFORM get_crisk USING     ls_data_line-crisk_id
+                                          gc_espanol
+                                CHANGING  ls_crisk
+                                          lt_impact
+                                          lt_driver
+                                          lt_crisk_cdfs.
+              "obtengo las consecuencias no medibles de crisk global
+              PERFORM get_no_medibles_crisk USING    ls_data_line-crisk_id
+                                            CHANGING lt_no_medibles.
+              "Modifica nombre y descripción
+              ls_data_line-risk_title       = ls_crisk-crisk_title.
+              ls_data_line-comments         = ls_crisk-crisk_description.
+
+***           creo los cdfs a partir del crisk
+              PERFORM generar_cdfs USING    ls_hrp9700_add
+                                            pt_dyn_fcat
+                                            lt_crisk_cdfs
+                                   CHANGING lt_risk_cdfs.
+*              PERFORM modify_crisk_local USING    ls_crisk_global
+*                                         CHANGING ls_add_line.
+     ENDIF.
+***
+    "creo el reisgo local con sus causas y consecuencias
+    PERFORM f_create_lang USING    ls_data_line
+                                   gc_espanol
+                                   lt_impact
+                                   lt_driver
+                                   lt_risk_cdfs
+                          CHANGING lv_objid
+                                   pt_logger.
+   "inserto las consecuencias no medibles al riesgo local pertenecientes al crisk padre
+   PERFORM f_update_no_medibles USING   ls_data_line-risk_id
+                                        ls_data_line-risk_title
+                                        lt_no_medibles
+                                CHANGING pt_logger.
+    "por los momentos será con la misma descripción estándar porque no se especificó que vendrían dos descripciones
+    lv_descr_l = ls_consulta-desc.
+    "guarda la descripción larga en la HRP1002
+    PERFORM f_save_desc USING lv_descr_l
+                              lv_objid
+                              gc_espanol.
+
+***creación en  inglés
+    CLEAR lv_descr_l .
+    ls_data_line-risk_title = ls_consulta-name_en.
+    ls_data_line-comments   = ls_consulta-desc_en.
+    lv_descr_l = ls_consulta-desc_en.
+*    perform f_create_lang USING    ls_data_line
+*                                   gc_ingles
+*                          changing lv_objid
+*                                   pt_logger.
+    "guarda la descripción larga en la HRP1002
+    PERFORM f_save_desc USING lv_descr_l
+                              lv_objid
+                              gc_ingles.
+***creación en turco
+    CLEAR lv_descr_l .
+    ls_data_line-risk_title = ls_consulta-name_tc.
+    ls_data_line-comments   = ls_consulta-desc_tc.
+    lv_descr_l = ls_consulta-desc_tc.
+
+*    ls_data_line-crisk_id = gc_prefix_crisk && ls_data_line-crisk_id.
+*    perform f_create_lang USING    ls_data_line
+*                                   gc_turco
+*                          changing lv_objid
+*                                   pt_logger.
+    "guarda la descripción larga en la HRP1002
+    PERFORM f_save_desc USING lv_descr_l
+                              lv_objid
+                              gc_turco.
+*    "agrega los valores de lso campos Z en el HRP9700
+*    PERFORM f_add_zfields USING     lv_objid
+*                                    ls_data_line-risk_title
+*                                    ls_hrp9700_add
+*                                    pt_dyn_fcat
+*                          CHANGING  pt_logger.
+
+    "relaciono ZP con el riesgo local
+    IF ls_hrp9700_add-zzid_zp IS NOT INITIAL.
+      PERFORM f_add_relation_zp USING     ls_hrp9700_add-zzid_zp
+                                          lv_objid
+                                          ls_data_line-risk_title
+                                CHANGING  pt_logger.
+    ENDIF.
+    "el risk_id es un código referencial para relacionar el fichero de riesgos con el fichero de relaciones, no se guarda en ningún infotipo, es solo para uso interno
+    PERFORM f_add_relations USING    ls_data_line-risk_id
+                                     lv_objid
+                                     ls_data_line-risk_title
+                                     pt_relaciones
+                                     lt_categorias
+                            CHANGING pt_logger.
+    PERFORM f_add_medidas USING   ls_data_line-risk_id
+                                  lv_objid
+                                  ls_data_line-risk_title
+                                  pt_medidas
+                                  lt_objid_9400
+                                  lt_objid_9103_med
+                          CHANGING pt_logger.
+
+
+  ENDLOOP.
+
+
+ENDFORM.
+
+FORM f_create_lang USING    ps_data_line TYPE grrm_s_api_risk_data
+                            pc_idioma
+                            pt_impact    TYPE grrm_t_api_impact  "consecuencias crisk
+                            pt_driver    TYPE grrm_t_api_driver  "causas crisk
+                            pt_risk_cdfs TYPE grfn_t_api_customfield_data "CDFs del riesgo local
+                   CHANGING pv_objid
+                            pt_logger    TYPE gtty_logger.
+
+  DATA: lo_session  TYPE REF TO cl_grfn_api_session,
+        lo_risk     TYPE REF TO cl_grrm_api_risk,
+        lv_log_line TYPE string.
+*
+  DATA: ls_data_retrieve TYPE grrm_s_api_risk_data,
+        ls_status_line   TYPE grrm_s_api_risk_status,
+        ls_attr_line     TYPE grrm_s_api_risk_attr.
+
+
+  CLEAR: ls_data_retrieve.
+
+* Se abre la sesión en turco
+  CALL METHOD cl_grfn_api_session=>open_daily
+    EXPORTING
+      iv_language = pc_idioma
+    RECEIVING
+      ro_instance = lo_session.
+
+  TRY.
+      " por defecto se creará el riesgo local en español
+      CASE pc_idioma.
+        WHEN gc_espanol.
+          CALL METHOD cl_grrm_api_risk=>if_grrm_api_risk~create
+            EXPORTING
+*             IV_REGULATION        = '$$$$$GEN_REG_RM'
+              is_risk_data = ps_data_line
+              io_session   = lo_session
+*             IS_RISK_ATTR =
+*             IV_RISK_ACTIVATION   =
+*             IV_RESP_ACTIVATION   =
+*             IV_CHECK_CREATE_AUTH = ABAP_TRUE
+            IMPORTING
+              ev_risk_id   = pv_objid.
+          lo_session->save( ).
+          CREATE OBJECT lo_risk
+            EXPORTING
+              iv_object  = pv_objid
+              io_session = lo_session.
+***     para idioma en inglés y en turco
+        WHEN OTHERS.
+          CREATE OBJECT lo_risk
+            EXPORTING
+              iv_object  = pv_objid
+              io_session = lo_session.
+
+      ENDCASE.
+* Se devuelven los datos del riesgo creado para luego guardar sus causas y consecuencias, además de comprobar que realmente se haya creado
+      CALL METHOD lo_risk->if_grrm_api_risk~retrieve
+        EXPORTING
+          iv_regulation  = pv_objid
+          iv_editable    = abap_true
+*         IV_LABEL_OBSOLETE   = ABAP_FALSE
+        IMPORTING
+*         ET_RISK_CORRELATION =
+          es_risk_data   = ls_data_retrieve
+          es_risk_status = ls_status_line
+          es_risk_attr   = ls_attr_line
+*         ET_UL_RISKS    =
+*         ET_RISK_DRIVER =
+*         ET_UL_RISK_PARENT   =
+*         ET_RISK_IMPACT =
+*         ES_UL_POSITION =
+          et_prisk       = DATA(lt_prisk).
+      ls_data_retrieve-risk_title = ps_data_line-risk_title.
+      ls_data_retrieve-comments   = ps_data_line-comments.
+*** se graban los datos del riesgo local con sus causas y consecuencias
+      CALL METHOD lo_risk->if_grrm_api_risk~update
+        EXPORTING
+*         IV_REGULATION       = '$$$$$GEN_REG_RM'
+          is_risk_data = ls_data_retrieve
+*         IT_RISK_CORRELATION =
+*         IS_RISK_ATTR =
+*         IT_UL_RISKS  =
+         it_risk_driver      =  pt_driver
+         it_risk_impact      =  pt_impact
+*         IV_FULL_CHECK       = ABAP_TRUE
+        .
+***    creo los cdfs del riesgo local
+      lo_risk->if_grfn_api_customfield~update(
+          EXPORTING
+*            iv_regulation_id    = if_grfn_api_regulation=>gc_cross_application " Regulation Type
+            it_customfield_data = pt_risk_cdfs ).
+      lo_session->save( ).
+      lo_session->close( ).
+    CATCH cx_grfn_exception.
+      PERFORM f_message_error_risk USING ps_data_line-risk_title  CHANGING lv_log_line.
+      PERFORM f_add_log_line USING ps_data_line-risk_title lv_log_line CHANGING pt_logger.
+  ENDTRY.
+
+ENDFORM.
+
+
+FORM f_queries_tables    USING    pt_consulta       TYPE gtty_consulta
+                                  pt_medidas        TYPE gtty_medida_file
+                                  pt_relaciones     TYPE gtty_rel_file
+                         CHANGING pt_objid_9800     TYPE gtty_hrp9800
+                                  pt_objid_9103     TYPE gtty_hrp9103
+                                  pt_objid_9103_med TYPE gtty_hrp9103
+                                  pt_objid_9400     TYPE gtty_hrp9400
+                                  pt_categorias     TYPE gtty_categoria
+                                  pt_hrp1001        TYPE gtty_hrp1001.
+  TYPES:  BEGIN OF gty_rel_prov,
+            risk_id               TYPE string,
+            tipo                  TYPE string,
+            id                    TYPE zgrc_de_ca_bbva_prov,
+          END OF gty_rel_prov,
+          gtty_rel_prov TYPE STANDARD TABLE OF gty_rel_prov.
+  DATA: lt_productos    TYPE gtty_rel_file,
+        lt_canales      TYPE gtty_rel_file,
+        lt_segmentos    TYPE gtty_rel_file,
+        lt_activos      TYPE gtty_rel_file,
+        lt_proveedores  TYPE gtty_rel_file,
+        lt_regulaciones TYPE gtty_rel_file,
+        "tabla con las relaciones para proveedores ya que el DE del código BBVA es diferente al predeterminado del pt_relaciones
+        lt_rel_prov     TYPE gtty_rel_prov,
+        "solo se necesita OBJID
+        lt_rel_activos  TYPE  gtty_categoria.
+
+
+  "obtengo los IDs de ZP para verificar que existan en BD
+  IF pt_consulta IS NOT INITIAL.
+    SELECT objid, zzcod_ext
+      FROM hrp9800
+      INTO TABLE @pt_objid_9800
+      FOR ALL ENTRIES IN @pt_consulta
+      WHERE zzcod_ext EQ @pt_consulta-zzid_zp
+      AND endda GE @sy-datum.
+  ENDIF.
+  "OBTENGO LOS IDS DE LAS UOS
+  IF pt_consulta IS NOT INITIAL.
+    SELECT objid, zzcod_ext_ln
+      FROM hrp9103
+      INTO TABLE @pt_objid_9103
+      FOR ALL ENTRIES IN @pt_consulta
+      WHERE zzcod_ext_ln EQ @pt_consulta-orgunit_id
+      AND endda GE @sy-datum.
+  ENDIF.
+  " solo comprobaré el ZP que es el código  que llegará
+  IF pt_objid_9800 IS NOT INITIAL.
+    SELECT *
+      FROM hrp1001
+      APPENDING TABLE @pt_hrp1001
+      FOR ALL ENTRIES IN @pt_objid_9800
+      WHERE objid EQ @pt_objid_9800-objid
+            AND otype EQ @gc_zp
+            AND endda GE @sy-datum.
+  ENDIF.
+
+
+  " solo comprobaré el riesgo librería que es el código  que llegará
+  IF pt_consulta IS NOT INITIAL.
+    SELECT *
+      FROM hrp1001
+      APPENDING TABLE @pt_hrp1001
+      FOR ALL ENTRIES IN @pt_consulta
+      WHERE objid EQ @pt_consulta-crisk_id
+            AND otype EQ @gc_risk_lib
+            AND endda GE @sy-datum.
+  ENDIF.
+
+****  medidas
+  "obtengo los IDs de medidas para verificar que existan en BD
+  IF pt_medidas IS NOT INITIAL.
+    SELECT objid, zzcod_ext_o6
+      FROM hrp9400
+      INTO TABLE @pt_objid_9400
+      FOR ALL ENTRIES IN @pt_medidas
+      WHERE zzcod_ext_o6 EQ @pt_medidas-modelo_cod_bbva
+      AND endda GE @sy-datum.
+
+    "OBTENGO LOS IDS DE LAS UOS DE MEDIDAS
+    SELECT objid, zzcod_ext_ln
+      FROM hrp9103
+      INTO TABLE @pt_objid_9103_med
+      FOR ALL ENTRIES IN @pt_medidas
+      WHERE zzcod_ext_ln EQ @pt_medidas-zzuo
+      AND endda GE @sy-datum.
+  ENDIF.
+
+  IF pt_objid_9400 IS NOT INITIAL.
+    SELECT *
+      FROM hrp1001
+      APPENDING TABLE @pt_hrp1001
+      FOR ALL ENTRIES IN @pt_objid_9400
+      WHERE objid EQ @pt_objid_9400-objid
+            AND endda GE @sy-datum.
+  ENDIF.
+*** cargo las categorías en diferentes tablas separadas por tipo
+  IF pt_relaciones IS NOT INITIAL .
+    LOOP AT pt_relaciones ASSIGNING FIELD-SYMBOL(<fs_relacion>).
+      CASE <fs_relacion>-tipo.
+        WHEN gc_regulacion.
+          APPEND <fs_relacion> TO lt_regulaciones.
+        WHEN gc_producto.
+          APPEND <fs_relacion> TO lt_productos.
+        WHEN gc_canal.
+          APPEND <fs_relacion> TO lt_canales.
+        WHEN gc_segmento.
+          APPEND <fs_relacion> TO lt_segmentos.
+        WHEN gc_activo.
+          APPEND <fs_relacion> TO lt_activos.
+        WHEN gc_proveedor.
+          APPEND <fs_relacion> TO lt_proveedores.
+      ENDCASE.
+    ENDLOOP.
+***
+***      regulaciones
+          SELECT objid ,zzcod_ext_07 ", 'Z1' "@gc_act_regulacion
+                 FROM hrp9905
+                 INTO TABLE @pt_categorias
+                 FOR ALL ENTRIES IN @lt_regulaciones
+                 WHERE zzcod_ext_07 = @lt_regulaciones-id.
+            "le asigno el tipo de categoría regulación para que pueda ser comprobado contra la tabla pt_relaciones (para verificar que los ids suminsitrados por fichero existen o no) al consultarse antes de relacionarse con el riesgo local
+            LOOP AT pt_categorias ASSIGNING FIELD-SYMBOL(<fs_cat>).
+              <fs_cat>-activity_type_id = gc_act_regulacion.
+            ENDLOOP.
+***
+****     productos
+          SELECT objid ,zzcod_ext_07 ", 'Z2' "@gc_act_producto
+                 FROM hrp9905
+                 APPENDING TABLE @pt_categorias
+                 FOR ALL ENTRIES IN @lt_productos
+                 WHERE zzcod_ext_07 = @lt_productos-id.
+         "le asigno el tipo de categoría producto para que pueda ser comprobado contra la tabla pt_relaciones (para verificar que los ids suminsitrados por fichero existen o no) al consultarse antes de relacionarse con el riesgo local
+         LOOP AT pt_categorias ASSIGNING <fs_cat>.
+              <fs_cat>-activity_type_id = gc_act_producto.
+         ENDLOOP.
+***
+***      canales
+            SELECT objid ,zzcod_ext_07 ", 'Z3' "@gc_act_canal
+                 FROM hrp9905
+                 APPENDING TABLE @pt_categorias
+                 FOR ALL ENTRIES IN @lt_canales
+                 WHERE zzcod_ext_07 = @lt_canales-id.
+            LOOP AT pt_categorias ASSIGNING <fs_cat>.
+              <fs_cat>-activity_type_id = gc_act_canal.
+            ENDLOOP.
+***      segmentos
+            SELECT objid ,zzcod_ext_07 ", 'Z4' "@gc_act_segmento
+                 FROM hrp9905
+                 APPENDING TABLE @pt_categorias
+                 FOR ALL ENTRIES IN @lt_segmentos
+                 WHERE zzcod_ext_07 = @lt_segmentos-id.
+            "le asigno el tipo de categoría segmento para que pueda ser comprobado contra la tabla pt_relaciones (para verificar que los ids suminsitrados por fichero existen o no) al consultarse antes de relacionarse con el riesgo local
+            LOOP AT pt_categorias ASSIGNING <fs_cat>.
+              <fs_cat>-activity_type_id = gc_act_segmento.
+            ENDLOOP.
+***
+***      activos
+            LOOP AT lt_activos ASSIGNING FIELD-SYMBOL(<fs_activo>).
+               APPEND INITIAL LINE TO lt_rel_activos  ASSIGNING FIELD-SYMBOL(<fs_rel_activo>).
+               WRITE <fs_activo>-id TO <fs_rel_activo>-objid.
+            ENDLOOP.
+*            "consulto la tabla de activos solo para confirmar que existen los valores pasados por fichero y evitar errores
+            SELECT objid ",' ' ", 'Z5' "@gc_act_activo
+                 FROM hrp9903
+                 APPENDING TABLE @pt_categorias
+                 FOR ALL ENTRIES IN @lt_rel_activos
+                 WHERE objid = @lt_rel_activos-objid.
+            "le asigno el tipo de categoría activo para que pueda ser comprobado contra la tabla pt_relaciones (para verificar que los ids suminsitrados por fichero existen o no) al consultarse antes de relacionarse con el riesgo local
+            LOOP AT pt_categorias ASSIGNING <fs_cat>.
+              <fs_cat>-activity_type_id = gc_act_activo.
+            ENDLOOP.
+***
+
+***      proveedores
+         MOVE-CORRESPONDING lt_proveedores[] TO lt_rel_prov[].
+            SELECT objid ,zzcod_ext_o7_prov ", 'Z6' "@gc_act_proveedor
+                 FROM hrp9912
+*                 APPENDING TABLE @pt_categorias
+                 INTO TABLE @DATA(lt_prov_cat)
+                 FOR ALL ENTRIES IN @lt_rel_prov
+                 WHERE zzcod_ext_o7_prov = @lt_rel_prov-id.
+            MOVE-CORRESPONDING lt_prov_cat[] TO pt_categorias[].
+            "le asigno el tipo de categoría proveedor para que pueda ser comprobado contra la tabla pt_relaciones (para verificar que los ids suminsitrados por fichero existen o no) al consultarse antes de relacionarse con el riesgo local
+            LOOP AT pt_categorias ASSIGNING <fs_cat>.
+              <fs_cat>-activity_type_id = gc_act_proveedor.
+            ENDLOOP.
+***
+  ENDIF.
+***
+ENDFORM.
+
+FORM f_verify_data_line USING   ps_consulta    TYPE gty_consulta
+                                pt_objid_9800  TYPE gtty_hrp9800
+                                pt_objid_9103  TYPE gtty_hrp9103
+                                pt_hrp1001     TYPE gtty_hrp1001
+                       CHANGING ps_hrp9700_add TYPE gty_hrp9700
+                                ps_data_line   TYPE grrm_s_api_risk_data
+                                pt_logger      TYPE gtty_logger.
+  DATA lv_log_line TYPE string.
+
+***     accedo al id de la 9800 ZP para guardarlo en la HRP9700
+  READ TABLE pt_objid_9800 INTO DATA(ls_9800)  WITH KEY zzcod_ext = ps_consulta-zzid_zp.
+  ps_hrp9700_add-zzid_zp = ls_9800-objid.
+
+*** acceso al id de la organicación para guardarlo en la hrp9700
+  READ TABLE  pt_objid_9103 INTO DATA(ls_9103) WITH KEY zzcod_ext_ln = ps_consulta-orgunit_id.
+  IF sy-subrc EQ 0.
+    ps_data_line-orgunit_id = ls_9103-objid.
+  ELSE.
+    PERFORM f_message_noexiste_org USING ps_consulta-orgunit_id  CHANGING lv_log_line.
+    PERFORM f_add_log_line USING ps_consulta-orgunit_id lv_log_line CHANGING pt_logger.
+  ENDIF.
+
+  READ TABLE pt_hrp1001 TRANSPORTING NO FIELDS WITH KEY objid = ps_data_line-crisk_id
+                                                        otype = gc_risk_lib.
+  IF sy-subrc NE 0.
+    PERFORM f_message_noexiste USING ps_data_line-risk_title ps_data_line-parent_id CHANGING lv_log_line.
+    PERFORM f_add_log_line USING ps_data_line-risk_title lv_log_line CHANGING pt_logger.
+  ENDIF.
+  READ TABLE pt_hrp1001 TRANSPORTING NO FIELDS WITH KEY objid = ps_hrp9700_add-zzid_zp
+                                                        otype = gc_zp.
+  IF sy-subrc NE 0.
+    PERFORM f_message_noexiste USING ps_data_line-risk_title ps_data_line-crisk_id CHANGING lv_log_line.
+    PERFORM f_add_log_line USING ps_data_line-risk_title lv_log_line CHANGING pt_logger.
+  ENDIF.
+
+ENDFORM.
+
+FORM f_add_relation_zp USING    pv_zzid_zp     TYPE hrobjid
+                                pv_objid     "TYPE HROBJID
+                                pv_risk_name
+                                "ps_data_line   TYPE GRRM_S_API_RISK_DATA
+                       CHANGING pt_logger      TYPE gtty_logger.
+  DATA lv_log_line TYPE string.
+  DATA lv_risk_id     TYPE hrobjid.
+  SPLIT pv_objid AT '/' INTO DATA(lv_resto) lv_risk_id.
+
+  DATA(lv_error) =  zgrc_cl_utilities_objects=>add_relation_hrp1001(
+          EXPORTING
+            iv_objid  = pv_zzid_zp
+            iv_sobid  = lv_risk_id
+            iv_rsign  = 'B'
+            iv_relat  = '970'
+            iv_otype  = gc_zp
+            iv_sclass = gc_risk_local
+            iv_plvar  = gc_plvar
+            iv_begda  = sy-datum ).
+  IF lv_error IS NOT INITIAL.
+    "no se ha podido crear la relación entre Riesgo local y ZP
+    PERFORM f_message_no_relation USING  lv_risk_id  pv_zzid_zp 'ZP' CHANGING lv_log_line.
+    PERFORM f_add_log_line USING pv_risk_name lv_log_line CHANGING pt_logger.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_PARAMETRIZACION
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LS_HF
+*&      <-- LV_LOG_LINE
+*&---------------------------------------------------------------------*
+FORM f_message_parametrizacion  USING    pv_campo_csv
+                                CHANGING pv_log_line TYPE string.
+  MESSAGE s227(zgrc_wd_msg) WITH pv_campo_csv INTO pv_log_line.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_NOEXISTE_ORG
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LS_CONSULTA_ORGUNIT_ID
+*&      <-- LV_LOG_LINE
+*&---------------------------------------------------------------------*
+FORM f_message_noexiste_org USING pv_cod_bbva_org
+                     CHANGING pv_log_line TYPE string.
+
+  MESSAGE s228(zgrc_wd_msg) WITH pv_cod_bbva_org INTO pv_log_line.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_ERROR_RISK
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> PS_DATA_LINE_TITTL
+*&      <-- LV_LOG_LINE
+*&---------------------------------------------------------------------*
+FORM f_message_error_risk  USING    pv_title
+                           CHANGING pv_log_line TYPE string.
+  MESSAGE s229(zgrc_wd_msg) WITH pv_title INTO pv_log_line.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_ERROR_CDF
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> PS_DATA_LINE_RISK_TITLE
+*&      <-- LV_LOG_LINE
+*&---------------------------------------------------------------------*
+FORM f_message_error_cdf   USING    pv_title
+                           CHANGING pv_log_line TYPE string.
+  MESSAGE s230(zgrc_wd_msg) WITH pv_title INTO pv_log_line.
+ENDFORM.
+
+FORM f_add_relations USING    pv_risk_id
+                              pv_objid
+                              pv_risk_name
+                              pt_data_relaciones TYPE gtty_rel_file
+                              pt_categorias      TYPE gtty_categoria
+                     CHANGING pt_logger          TYPE gtty_logger.
+  DATA: lv_log_line TYPE string,
+        lv_risk_id  TYPE hrobjid,
+        lv_error    TYPE flag.
+
+*  SPLIT pv_objid AT '/' INTO DATA(lv_resto) lv_risk_id.
+  lv_risk_id = pv_objid.
+
+  LOOP AT pt_data_relaciones INTO DATA(ls_data_relacion) WHERE risk_id EQ pv_risk_id.
+    CLEAR: lv_error,
+           lv_log_line.
+
+    CASE ls_data_relacion-tipo.
+      WHEN gc_regulacion.
+***     obtengo la categoría para leugo verificar si existe o no en SAP, si no existe se lanza mensaje de error
+        READ TABLE pt_categorias ASSIGNING FIELD-SYMBOL(<fs_categoria>) WITH KEY zzcod_ext_07 = ls_data_relacion-id.
+        IF sy-subrc NE 0.
+          CONCATENATE 'La regulación ' ls_data_relacion-id ' especificado no existe'
+               INTO lv_log_line
+               SEPARATED BY space.
+          PERFORM f_add_log_line USING pv_risk_name lv_log_line CHANGING pt_logger.
+          CONTINUE.
+        ENDIF.
+***       si no hay error creo la relación de la categoría con el riesgo local
+        lv_error =  zgrc_cl_utilities_objects=>add_relation_hrp1001(
+        EXPORTING
+          iv_objid  = lv_risk_id
+          iv_sobid  = <fs_categoria>-objid
+          iv_rsign  = 'B'
+          iv_relat  = '003'
+          iv_otype  = gc_risk_local
+          iv_sclass = gc_jerarquia
+          iv_plvar  = gc_plvar
+          iv_begda  = sy-datum ).
+***
+      WHEN gc_producto.
+**     obtengo la categoría para leugo verificar si existe o no en SAP, si no existe se lanza mensaje de error
+        READ TABLE pt_categorias ASSIGNING <fs_categoria> WITH KEY zzcod_ext_07 = ls_data_relacion-id.
+        IF sy-subrc NE 0.
+          CONCATENATE 'El producto ' ls_data_relacion-id ' especificado no existe'
+               INTO lv_log_line
+               SEPARATED BY space.
+          PERFORM f_add_log_line USING pv_risk_name lv_log_line CHANGING pt_logger.
+          CONTINUE.
+        ENDIF.
+***       si no hay error creo la relación de la categoría con el riesgo local
+        lv_error =  zgrc_cl_utilities_objects=>add_relation_hrp1001(
+        EXPORTING
+          iv_objid  = lv_risk_id
+          iv_sobid  = <fs_categoria>-objid
+          iv_rsign  = 'B'
+          iv_relat  = '003'
+          iv_otype  = gc_risk_local
+          iv_sclass = gc_jerarquia
+          iv_plvar  = gc_plvar
+          iv_begda  = sy-datum ).
+***
+      WHEN gc_canal.
+**     obtengo la categoría para leugo verificar si existe o no en SAP, si no existe se lanza mensaje de error
+        READ TABLE pt_categorias ASSIGNING <fs_categoria> WITH KEY zzcod_ext_07 = ls_data_relacion-id.
+        IF sy-subrc NE 0.
+          CONCATENATE 'El canal ' ls_data_relacion-id ' especificado no existe'
+               INTO lv_log_line
+               SEPARATED BY space.
+          PERFORM f_add_log_line USING pv_risk_name lv_log_line CHANGING pt_logger.
+          CONTINUE.
+        ENDIF.
+***       si no hay error creo la relación de la categoría con el riesgo local
+        lv_error =  zgrc_cl_utilities_objects=>add_relation_hrp1001(
+        EXPORTING
+          iv_objid  = lv_risk_id
+          iv_sobid  = <fs_categoria>-objid
+          iv_rsign  = 'B'
+          iv_relat  = '003'
+          iv_otype  = gc_risk_local
+          iv_sclass = gc_jerarquia
+          iv_plvar  = gc_plvar
+          iv_begda  = sy-datum ).
+***
+      WHEN gc_segmento.
+**     obtengo la categoría para leugo verificar si existe o no en SAP, si no existe se lanza mensaje de error
+        READ TABLE pt_categorias ASSIGNING <fs_categoria> WITH KEY zzcod_ext_07 = ls_data_relacion-id.
+        IF sy-subrc NE 0.
+          CONCATENATE 'El segmento ' ls_data_relacion-id ' especificado no existe'
+               INTO lv_log_line
+               SEPARATED BY space.
+          PERFORM f_add_log_line USING pv_risk_name lv_log_line CHANGING pt_logger.
+          CONTINUE.
+        ENDIF.
+***       si no hay error creo la relación de la categoría con el riesgo local
+        lv_error =  zgrc_cl_utilities_objects=>add_relation_hrp1001(
+        EXPORTING
+          iv_objid  = lv_risk_id
+          iv_sobid  = <fs_categoria>-objid
+          iv_rsign  = 'B'
+          iv_relat  = '003'
+          iv_otype  = gc_risk_local
+          iv_sclass = gc_jerarquia
+          iv_plvar  = gc_plvar
+          iv_begda  = sy-datum ).
+***
+      WHEN gc_activo.
+**     obtengo la categoría para leugo verificar si existe o no en SAP, si no existe se lanza mensaje de error
+        READ TABLE pt_categorias ASSIGNING <fs_categoria> WITH KEY objid = ls_data_relacion-id.
+        IF sy-subrc NE 0.
+          CONCATENATE 'El activo ' ls_data_relacion-id ' especificado no existe'
+               INTO lv_log_line
+               SEPARATED BY space.
+          PERFORM f_add_log_line USING pv_risk_name lv_log_line CHANGING pt_logger.
+        ENDIF.
+***       si no hay error creo la relación de la categoría con el riesgo local
+        lv_error =  zgrc_cl_utilities_objects=>add_relation_hrp1001(
+        EXPORTING
+          iv_objid  = lv_risk_id
+          iv_sobid  = <fs_categoria>-objid
+          iv_rsign  = 'B'
+          iv_relat  = '003'
+          iv_otype  = gc_risk_local
+          iv_sclass = gc_jerarquia
+          iv_plvar  = gc_plvar
+          iv_begda  = sy-datum ).
+***
+      WHEN gc_proveedor.
+****     obtengo la categoría para leugo verificar si existe o no en SAP, si no existe se lanza mensaje de error
+        READ TABLE pt_categorias ASSIGNING <fs_categoria> WITH KEY zzcod_ext_07 = ls_data_relacion-id.
+        IF sy-subrc NE 0.
+          CONCATENATE 'El proveedor ' ls_data_relacion-id ' especificado no existe'
+               INTO lv_log_line
+               SEPARATED BY space.
+          PERFORM f_add_log_line USING pv_risk_name lv_log_line CHANGING pt_logger.
+          CONTINUE.
+        ENDIF.
+***       si no hay error creo la relación de la categoría con el riesgo local
+        lv_error =  zgrc_cl_utilities_objects=>add_relation_hrp1001(
+        EXPORTING
+          iv_objid  = lv_risk_id
+          iv_sobid  = <fs_categoria>-objid
+          iv_rsign  = 'B'
+          iv_relat  = '003'
+          iv_otype  = gc_risk_local
+          iv_sclass = gc_jerarquia
+          iv_plvar  = gc_plvar
+          iv_begda  = sy-datum ).
+***
+    ENDCASE.
+    IF lv_error IS NOT INITIAL.
+      "no se ha podido crear la relación entre Riesgo local y ...
+      PERFORM f_message_no_relation USING  lv_risk_id  ls_data_relacion-id ls_data_relacion-tipo  CHANGING lv_log_line.
+      PERFORM f_add_log_line USING pv_risk_name lv_log_line CHANGING pt_logger.
+    ENDIF.
+
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_GET_DATA_RELACIONES
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LT_DATA_RELACIONES
+*&      --> LT_RELACIONES
+*&---------------------------------------------------------------------*
+FORM f_get_data_relaciones  USING    pt_data            TYPE gtty_data_file
+                                     pt_relaciones      TYPE gtty_rel_file.
+
+  CONSTANTS: lc_token TYPE string VALUE '~'.
+  DATA ls_relacion LIKE LINE OF pt_relaciones.
+
+  LOOP AT pt_data ASSIGNING FIELD-SYMBOL(<lfs_data>) .
+    CHECK sy-tabix > 1.
+    SPLIT <lfs_data>-line AT lc_token INTO   ls_relacion-risk_id
+                                             ls_relacion-tipo
+                                             ls_relacion-id.
+    APPEND ls_relacion TO pt_relaciones.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_GET_DATA_MEDIDAS
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LT_DATA_MEDIDAS
+*&      --> LT_MEDIDAS
+*&---------------------------------------------------------------------*
+FORM f_get_data_medidas   USING    pt_data         TYPE gtty_data_file
+                                   pt_medidas      TYPE gtty_medida_file.
+
+  CONSTANTS: lc_token TYPE string VALUE '~'.
+  DATA ls_medida LIKE LINE OF pt_medidas.
+
+  LOOP AT pt_data ASSIGNING FIELD-SYMBOL(<lfs_data>).
+    CHECK sy-tabix > 1.
+    SPLIT <lfs_data>-line AT lc_token INTO   ls_medida-risk_id        "índice en fichero del riesgo local
+                                             ls_medida-modelo_cod_bbva       "RESP_TEMPLATE
+*                                             ls_medida-name
+*                                             ls_medida-desc
+*                                             ls_medida-name_en
+*                                             ls_medida-name_tc
+*                                             ls_medida-desc_en
+*                                             ls_medida-desc_tc
+                                            ls_medida-zzdesc_ext             "type string,       "descripción extendida
+                                            ls_medida-zzevidencia_control    "type string, "evidencia de control
+                                            ls_medida-zzfrecuencia           "type string, "frecuencia
+                                            ls_medida-zzuo                   "type string,"uo  NO SE HEREDA
+                                            ls_medida-zzrcs                  "type string, "RCS NO SE HEREDA
+                                            ls_medida-zztipo_control         "type string, "tipo de control
+                                            ls_medida-zzcontrol_ext          "type string, "control externalizado/
+                                            ls_medida-zzunid_ext_control     "type string, "unidad externalizada de control
+                                            ls_medida-zzresponsable_control  "type string, "responsable del control
+                                            ls_medida-zzcomentario_evidencia_contrl "type string, "evidencia de control
+*                                **         campos que se heredan
+                                            ls_medida-zzmodo_mitigacion      "type string, " modo mitigación  SE PUEDE HEREDAR Y SINO SE CREA DESDE EL FICHERO
+                                            ls_medida-zznaturaleza           "type string, "naturaleza         SE PUEDE HEREDAR Y SINO SE CREA DESDE EL FICHERO
+                                            ls_medida-zzelement_modelo.       "type string,   "elemento del modelo  SE PUEDE HEREDAR Y SINO SE CREA DESDE EL FICHERO.
+    APPEND ls_medida TO pt_medidas.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_ADD_MEDIDAS
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LS_DATA_LINE_RISK_ID
+*&      --> LV_OBJID
+*&      --> LS_DATA_LINE_RISK_TITLE
+*&      --> PT_MEDIDAS
+*&      --> LT_OBJID_9400
+*&      <-- PT_LOGGER
+*&---------------------------------------------------------------------*
+FORM f_add_medidas  USING    pv_risk_id
+                             pv_objid
+                             pv_risk_name
+                             pt_medidas                   TYPE gtty_medida_file
+                             pt_objid_9400                TYPE gtty_hrp9400
+                             pt_objid_9103_med            TYPE gtty_hrp9103
+                    CHANGING pt_logger                    TYPE gtty_logger.
+
+  DATA: lo_risk        TYPE REF TO cl_grrm_api_risk,
+        lo_response    TYPE REF TO cl_grrm_api_response,
+        lo_resp_temp   TYPE REF TO cl_grrm_api_response_template,
+        ls_response    TYPE        grrm_s_api_response_data,
+        ls_risk_data   TYPE        grrm_s_api_risk_data,
+        ls_resp_t_data TYPE        grrm_s_api_response_templ_list,  "valores a heredar desde response template
+        lt_resp_t_cdfs TYPE        grfn_t_api_customfield_data, "cdfs a heredar desde response template
+        lv_response_id TYPE        grfn_api_object_id,
+        lv_id_resp_t   TYPE        grfn_api_object_id,
+        lo_session     TYPE REF TO cl_grfn_api_session,
+        lv_orgunit_id  TYPE        hrobjid,
+        lt_risk        TYPE        grrm_t_api_risk_response,
+        ls_risk        TYPE        grrm_s_api_response_risk,
+        lv_uname       TYPE        syuname,
+        lv_guid        TYPE        grfn_guid,
+        lv_object_id   TYPE        grfn_object_id,
+        lv_entity_id   TYPE        grfn_api_entity_id,
+        lt_medidas_del_mod      TYPE grrm_t_api_response_instance.
+  DATA  lv_log_line    TYPE string.
+
+*  read table PT_MEDIDAS into data(ls_medida) with key risk_id = pv_risk_id .
+*  if sy-subrc NE 0.
+*      PERFORM f_message_no_risk_medida USING  pv_risk_name  CHANGING lv_log_line.
+*      PERFORM f_add_log_line           USING pv_risk_name lv_log_line CHANGING pt_logger.
+*  endif.
+
+  LOOP AT  pt_medidas INTO DATA(ls_medida) WHERE risk_id = pv_risk_id .
+    CLEAR: lv_id_resp_t,
+           ls_response,
+           ls_resp_t_data,
+           lt_resp_t_cdfs,
+           lt_medidas_del_mod .
+
+*** creación de una medida a partir de un modelo
+      CHECK  ls_medida-modelo_cod_bbva IS NOT INITIAL.
+      READ TABLE pt_objid_9400 INTO DATA(ls_9400) WITH KEY zzcod_ext_o6 = ls_medida-modelo_cod_bbva.
+      IF sy-subrc NE 0.
+        PERFORM f_message_no_mod_medida USING  pv_risk_name ls_medida-modelo_cod_bbva     CHANGING lv_log_line.
+        PERFORM f_add_log_line          USING  pv_risk_name lv_log_line            CHANGING pt_logger.
+        CONTINUE.
+      ENDIF.
+
+      CONCATENATE 'RESP_TEMPL/' ls_9400-objid INTO lv_id_resp_t.
+*** obtengo los datos del modelo de medida suministrado, cdfs y las medidas creadas con el mismo
+      PERFORM get_medidas   USING    lv_id_resp_t
+                                     pv_risk_name
+                                     ls_medida-modelo_cod_bbva
+                                     gc_espanol
+                            CHANGING ls_resp_t_data  "valores a heredar desde response template
+                                     lt_resp_t_cdfs   "cdfs a heredar desde response template
+                                     lt_medidas_del_mod "medidas creadas anteriormente con el modelo
+                                     pt_logger.
+***
+***  si no hay medidas creadas con el modelo de medidas pasado por parámetro creo una y se la asigno al riesgo
+    IF lt_medidas_del_mod IS INITIAL.
+      PERFORM create_medida USING    gc_espanol
+                                     pv_objid
+                                     lv_id_resp_t
+                                     ls_medida
+                                     pv_risk_name
+                                     pt_objid_9103_med
+                                     ls_resp_t_data  "valores a heredar desde response template
+                                     lt_resp_t_cdfs   "cdfs a heredar desde response template
+                            CHANGING pt_logger.
+      PERFORM create_medida USING    gc_ingles
+                                     pv_objid
+                                     lv_id_resp_t
+                                     ls_medida
+                                     pv_risk_name
+                                     pt_objid_9103_med
+***                                  no se usarán en esta llamada
+                                     ls_resp_t_data  "valores a heredar desde response template
+                                     lt_resp_t_cdfs   "cdfs a heredar desde response template
+***
+***
+                            CHANGING pt_logger.
+      PERFORM create_medida USING    gc_turco
+                                     pv_objid
+                                     lv_id_resp_t
+                                     ls_medida
+                                     pv_risk_name
+                                     pt_objid_9103_med
+****                                 no se usarán en esta llamada
+                                     ls_resp_t_data  "valores a heredar desde response template
+                                     lt_resp_t_cdfs   "cdfs a heredar desde response template
+***
+                            CHANGING pt_logger.
+*** asignación de las madidas creadas con el modelo suminsitrado "modelo_cod_bbva"
+    ELSE.
+*      READ TABLE pt_objid_9400 INTO DATA(ls_9400_assign) WITH KEY zzcod_ext_o6 = ls_medida-cod_bbva_medida_asign.
+*      IF sy-subrc NE 0.
+*        PERFORM f_message_no_medida   USING  ls_medida-cod_bbva      CHANGING lv_log_line.
+*        PERFORM f_add_log_line        USING pv_risk_name lv_log_line CHANGING pt_logger.
+*      ENDIF.
+*      CONCATENATE 'RESPONSE/' ls_9400_assign-objid INTO lv_id_resp_t.
+      PERFORM asignar_medida USING    lv_id_resp_t
+                                      pv_objid
+                                      pv_risk_name
+                                      ls_medida-modelo_cod_bbva
+                                      ls_resp_t_data      "valores a heredar desde response template
+                                      lt_resp_t_cdfs      "cdfs a heredar desde response template
+                                      lt_medidas_del_mod  "medidas creadas anteriormente con el modelo
+                             CHANGING pt_logger.
+***
+    ENDIF.
+****
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_NO_RISK_MEDIDA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> PV_OBJID
+*&      <-- LV_LOG_LINE
+*&---------------------------------------------------------------------*
+FORM f_message_no_risk_medida  USING    pv_objid
+                               CHANGING pv_log_line TYPE string.
+  MESSAGE s231(zgrc_wd_msg) WITH pv_objid INTO pv_log_line.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_NO_MEDIDA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LS_MEDIDA_ID
+*&      <-- LV_LOG_LINE
+*&---------------------------------------------------------------------*
+FORM f_message_no_medida  USING    pv_risk_name
+                                   pv_medida_id
+                          CHANGING pv_log_line TYPE string.
+  MESSAGE s238(zgrc_wd_msg) WITH  pv_medida_id pv_risk_name  INTO pv_log_line.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_NO_CREATE_MEDIDA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> PV_RISK_NAME
+*&      --> LS_MEDIDA_ID
+*&      <-- LV_LOG_LINE
+*&---------------------------------------------------------------------*
+FORM f_message_no_create_medida  USING    pv_risk_name
+                                          pv_medida_id
+                                 CHANGING pv_log_line TYPE string.
+  MESSAGE s233(zgrc_wd_msg) WITH  pv_medida_id pv_risk_name  INTO pv_log_line.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CREATE_MEDIDA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> GC_ESPANOL
+*&      --> LV_ID_RESP_T
+*&      <-- LO_RESPONSE
+*&      <-- TYPE
+*&      <-- REF
+*&      <-- TO
+*&      <-- CL_GRRM_API_RESPONSE
+*&---------------------------------------------------------------------*
+FORM create_medida  USING    pc_lang
+                             pv_objid_risk
+                             pv_id_resp_t
+                             ps_medida          TYPE gty_medida_file
+                             pv_risk_name
+                             pt_objid_9103_med  TYPE gtty_hrp9103 "UOS DE LAS MEDIDAS
+                             ps_resp_t_data     TYPE grrm_s_api_response_templ_list "valores a heredar desde response template
+                             pt_resp_t_cdfs     TYPE grfn_t_api_customfield_data    "cdfs a heredar desde response template
+                    CHANGING pt_logger          TYPE gtty_logger.
+  DATA: lo_risk        TYPE REF TO cl_grrm_api_risk,
+        lo_response    TYPE REF TO cl_grrm_api_response,
+        lo_resp_temp   TYPE REF TO cl_grrm_api_response_template,
+        ls_response    TYPE        grrm_s_api_response_data,
+        ls_risk_data   TYPE        grrm_s_api_risk_data,
+*        ls_resp_t_data TYPE        grrm_s_api_response_templ_list,  "valores a heredar desde response template
+*        lt_resp_t_cdfs TYPE        grfn_t_api_customfield_data, "cdfs a heredar desde response template
+        lt_resp_cdfs   TYPE        grfn_t_api_customfield_data, "cdfs response
+        lv_response_id TYPE        grfn_api_object_id,
+        lv_id_resp_t   TYPE        grfn_api_object_id,
+        lo_session     TYPE REF TO cl_grfn_api_session,
+        lv_orgunit_id  TYPE hrobjid.
+
+  DATA  lv_log_line    TYPE string.
+
+   TRY.
+        CALL METHOD cl_grfn_api_session=>open_daily
+          EXPORTING
+            iv_language = pc_lang
+          RECEIVING
+            ro_instance = lo_session.
+        lo_risk ?= lo_session->get( pv_objid_risk ).
+        "obtengo los datos guardados del riesgo local
+        lo_risk->retrieve( IMPORTING es_risk_data = ls_risk_data ).
+
+***        si el nombre o la descripción existen se heredan, sino se usa la original que trae el fichero
+*        ls_response-response_title = ps_medida-name.
+*        ls_response-resp_comment   = ps_medida-desc.
+        IF ps_resp_t_data-name IS NOT INITIAL.
+          ls_response-response_title = ps_resp_t_data-name.
+        ENDIF.
+        IF ps_resp_t_data-descript IS NOT INITIAL.
+          ls_response-resp_comment   = ps_resp_t_data-descript.
+        ENDIF.
+        ls_response-effective_from  = sy-datum.               "evectivo hasta
+        ls_response-effective_to    = '99991231'.             "evectivo desde
+        ls_response-resp_effect_lvl = '10' .                  "funcionamiento adecuado
+
+        ls_response-resp_templ_id    = pv_id_resp_t.
+        ls_response-distr_method     = 'C'. "El metodo de distribución es copia siempre
+        ls_response-risk_id          = ls_risk_data-risk_id.
+        ls_response-orgunit_id       = ls_risk_data-orgunit_id.
+        ls_response-resp_entity_type = cl_grrm_api_response=>mc_resp_entity_type_re.
+        ls_response-resp_completion  = '100'.
+
+        lv_response_id = cl_grrm_api_response=>create(
+                           is_response_new  = ls_response
+                           io_session       = lo_session
+                           iv_risk_id       = ls_risk_data-risk_id ).
+        "Activamos la response
+        lo_response ?=  lo_session->get( lv_response_id ).
+        lo_response->if_grrm_api_response~doaction( 'G0R1' ).
+        lo_session->save( ).
+***
+***      Creo los cdf para la medida guardada , solo es necesario en español
+        IF pc_lang EQ gc_espanol.
+          lo_response ?= lo_session->get( lv_response_id ).
+          "obtengo los datos guardados de la medida acabada de ser creada
+          lo_response->if_grfn_api_customfield~retrieve( IMPORTING et_customfield_data = lt_resp_cdfs  ).
+
+          "mapeo el valor de los cdfs del response_template con los de la medida si estos no están vacíos
+          LOOP AT pt_resp_t_cdfs ASSIGNING FIELD-SYMBOL(<fs_resp_t_cdfs>).
+            READ TABLE lt_resp_cdfs ASSIGNING FIELD-SYMBOL(<fs_resp_cdf>) WITH KEY fieldname = <fs_resp_t_cdfs>-fieldname.
+            IF sy-subrc EQ 0.
+               CASE <fs_resp_t_cdfs>-fieldname.
+                 WHEN 'ZZNATURALEZA'.
+                   <fs_resp_cdf>-value = ps_medida-zznaturaleza.
+                   IF <fs_resp_t_cdfs>-value IS NOT INITIAL.
+                     <fs_resp_cdf>-value = <fs_resp_t_cdfs>-value.
+                   ENDIF.
+                 WHEN 'ZZMODO_MITIGACION'.
+                   <fs_resp_cdf>-value = ps_medida-zzmodo_mitigacion.
+                   IF <fs_resp_t_cdfs>-value IS NOT INITIAL.
+                     <fs_resp_cdf>-value = <fs_resp_t_cdfs>-value.
+                   ENDIF.
+               WHEN 'ZZELEMENT_MODELO'.
+                   <fs_resp_cdf>-value = ps_medida-zzelement_modelo.
+                   IF <fs_resp_t_cdfs>-value IS NOT INITIAL.
+                     <fs_resp_cdf>-value = <fs_resp_t_cdfs>-value.
+                   ENDIF.
+               WHEN 'ZZRCS'.
+                 <fs_resp_cdf>-value = ps_medida-zzrcs.
+               WHEN 'ZZUO'.
+                 "OBTENGO EL OBJID QUE SE ENCUENTRA EN EL FICHERO
+                 READ TABLE pt_objid_9103_med INTO DATA(ls_9103_medida) WITH KEY zzcod_ext_ln = ps_medida-zzuo.
+                 IF sy-subrc EQ 0.
+                   <fs_resp_cdf>-value = ls_9103_medida-objid .  "UO DE LA MEDIDA QUE VIENE POR FICHERO
+                 ENDIF.
+               WHEN 'ZZDESC_EXT'.
+                 <fs_resp_cdf>-value = ps_medida-zzdesc_ext.
+               WHEN 'ZZEVIDENCIA_CONTROL'.
+                 <fs_resp_cdf>-value = ps_medida-zzevidencia_control.
+               WHEN 'ZZFRECUENCIA'.
+                 <fs_resp_cdf>-value = ps_medida-zzfrecuencia.
+               WHEN 'ZZTIPO_CONTROL'.
+                 <fs_resp_cdf>-value = ps_medida-zztipo_control.
+               WHEN 'ZZCONTROL_EXT'.
+                 <fs_resp_cdf>-value = ps_medida-zzcontrol_ext.
+               WHEN 'ZZUNID_EXT_CONTROL'.
+                 <fs_resp_cdf>-value = ps_medida-zzunid_ext_control.
+               WHEN 'ZZRESPONSABLE_CONTROL'.
+                 <fs_resp_cdf>-value = ps_medida-zzresponsable_control.
+               WHEN 'ZZCOMENTARIO_EVIDENCIA_CONTRL'.
+                 <fs_resp_cdf>-value = ps_medida-zzcomentario_evidencia_contrl.
+               ENDCASE.
+            ENDIF.
+          ENDLOOP.
+
+          "guardo los cdfs de la medida
+          CALL METHOD lo_response->if_grfn_api_customfield~update( EXPORTING it_customfield_data = lt_resp_cdfs ).
+          lo_session->save( ).
+        ENDIF.
+***
+      CATCH cx_grfn_exception.
+        PERFORM f_message_no_create_medida USING  pv_risk_name ps_medida-modelo_cod_bbva CHANGING lv_log_line.
+        PERFORM f_add_log_line             USING pv_risk_name lv_log_line CHANGING pt_logger.
+    ENDTRY.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form GET_CRISK
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LS_DATA_LINE_CRISK_ID
+*&      --> LC_ESPANOL
+*&      <-- LS_CRISK
+*&      <-- LT_IMPACT
+*&      <-- LT_DRIVER
+*&---------------------------------------------------------------------*
+FORM get_crisk  USING    pv_crisk_id     TYPE grfn_api_object_id
+                         pv_language
+                CHANGING ps_crisk TYPE grrm_s_api_crisk_data
+                         pt_impact       TYPE grrm_t_api_impact
+                         pt_driver       TYPE grrm_t_api_driver
+                         pt_crisk_cdfs   TYPE grfn_t_api_customfield_data.
+
+  CONSTANTS lc_actvt    TYPE string VALUE 'CRISK/'.
+
+  DATA: lo_session TYPE REF TO cl_grfn_api_session,
+        lo_risk    TYPE REF TO cl_grrm_api_crisk.
+
+  DATA: ls_data      TYPE grrm_s_api_crisk_data.
+*        lv_objid TYPE grfn_api_object_id.
+
+  CLEAR: ps_crisk.
+
+* Se abre la sesión en inglés
+  CALL METHOD cl_grfn_api_session=>open_daily
+    EXPORTING
+      iv_language = pv_language
+    RECEIVING
+      ro_instance = lo_session.
+
+  CREATE OBJECT lo_risk
+    EXPORTING
+      iv_object  = pv_crisk_id
+      io_session = lo_session.
+
+  TRY.
+    "OBTENGO EL CRISK GLOBAL CON SUS CAUSAS Y CONSECUENCIAS
+      CALL METHOD lo_risk->if_grrm_api_crisk~retrieve
+        EXPORTING
+          iv_editable = abap_true
+        IMPORTING
+          es_data     = ps_crisk
+          et_cc_impact  = pt_impact
+          et_cc_driver  = pt_driver.
+
+    CALL METHOD lo_risk->if_grfn_api_customfield~retrieve
+*      EXPORTING
+*        iv_regulation_id     = IF_GRFN_API_REGULATION=>GC_CROSS_APPLICATION
+*        iv_time_stamp        =
+      IMPORTING
+        et_customfield_data  = pt_crisk_cdfs.
+*        et_customfield_mdata =
+*        ev_reg_specific      =
+*        et_customfield       = .
+      lo_session->close( ).
+    CATCH cx_grfn_exception.
+  ENDTRY.
+
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form GET_NO_MEDIBLES_CRISK
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LS_DATA_LINE_CRISK_ID
+*&      <-- LT_NO_MEDIBLES
+*&---------------------------------------------------------------------*
+FORM get_no_medibles_crisk  USING    pv_glob
+                            CHANGING pt_no_medibles TYPE gtty_tb_0052.
+
+*Se recuperan las consecuencias no medibles del riesgo librería
+  SELECT
+    FROM   zgrc_tb_0052
+    FIELDS *
+    WHERE  objid EQ @pv_glob "ID riesgo librería real seleccionado
+    AND    begda LE @sy-datum
+    AND    endda GE @sy-datum
+    INTO TABLE      @pt_no_medibles.
+
+ENDFORM.
+
+FORM f_update_no_medibles  USING    pv_objid_risk
+                                    pv_name_risk
+                                    pt_no_medibles TYPE gtty_tb_0052
+                          CHANGING  pt_logger      TYPE gtty_logger.
+  DATA lv_log_line TYPE string.
+
+  DATA lt_conseqs_risk TYPE gtty_tb_0052.
+  lt_conseqs_risk = VALUE #( FOR <lfs_no_medible> IN pt_no_medibles
+                             ( plvar       = <lfs_no_medible>-plvar
+                               otype       = gc_risk_local
+                               objid       = pv_objid_risk  "ID riesgo local
+                               begda       = sy-datum
+                               endda       = '99993112'
+                               consequence = <lfs_no_medible>-consequence ) ).
+*Se actualiza la tabla con las consecuencias no medibles para el riesgo local con las del riesgo librería
+    INSERT zgrc_tb_0052 FROM TABLE lt_conseqs_risk.
+    IF sy-subrc IS NOT INITIAL.
+
+      CONCATENATE sy-datum' - 'sy-timlo' - ' 'No se han podido crear las consecuencias no medibles de ' pv_name_risk
+           INTO lv_log_line
+           SEPARATED BY space.
+      PERFORM f_add_log_line  USING pv_name_risk
+                                    lv_log_line
+                              CHANGING  pt_logger.
+    ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form GENERAR_CDFS
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LT_CRISK_CDFS
+*&      <-- LT_RISK_CDFS
+*&---------------------------------------------------------------------*
+FORM generar_cdfs  USING    ps_hrp9700_add TYPE gty_hrp9700
+                            pt_dyn_fcat   TYPE lvc_t_fcat
+                            pt_crisk_cdfs TYPE grfn_t_api_customfield_data
+                   CHANGING pt_risk_cdfs  TYPE grfn_t_api_customfield_data.
+
+  LOOP AT pt_crisk_cdfs ASSIGNING FIELD-SYMBOL(<fs_crisk_cdf>).
+    APPEND INITIAL LINE TO pt_risk_cdfs ASSIGNING FIELD-SYMBOL(<fs_risk_cdf>).
+*** para que riesgo local herede el campo marca sox del crisk, eso porque ambos campos tienen nombres diferentes
+    IF <fs_crisk_cdf>-fieldname EQ 'ZZMARCA_SOX'.
+      <fs_risk_cdf>-fieldname = 'ZZSOX'.
+      <fs_risk_cdf>-value = <fs_crisk_cdf>-value.
+    ENDIF.
+***  "copio los campos tiempo impacto, nivel impacto reputacional y valoración del crisk en el riesgo local
+    CHECK <fs_crisk_cdf>-fieldname    EQ 'ZZIMPACTO'
+          OR <fs_crisk_cdf>-fieldname EQ 'ZZNIVEL_IMP_REP'
+          OR <fs_crisk_cdf>-fieldname EQ 'ZZVALORACION'.
+           MOVE <fs_crisk_cdf> TO <fs_risk_cdf>.
+  ENDLOOP.
+*** asigno los campos Z que me trae el fichero a la tabla de CDFs de riesgos locales
+  PERFORM add_cdfs_from_file USING     ps_hrp9700_add
+                                       pt_dyn_fcat
+                             CHANGING  pt_risk_cdfs.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form ADD_CDFS_FROM_FILE
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> PV_OBJID
+*&      --> PV_RISK_TITLE
+*&      --> PT_RISK_CDFS
+*&      --> PT_DYN_FCAT
+*&      <-- PT_LOGGER
+*&---------------------------------------------------------------------*
+FORM add_cdfs_from_file  USING    ps_hrp_add      TYPE gty_hrp9700
+                                  pt_dyn_fcat     TYPE lvc_t_fcat
+                         CHANGING pt_risk_cdfs    TYPE grfn_t_api_customfield_data.
+  FIELD-SYMBOLS:
+                 <fs_campo_add>,
+                 <fs_comp>      TYPE any.
+  LOOP AT pt_dyn_fcat INTO DATA(ls_dyn_cat).
+        ASSIGN COMPONENT ls_dyn_cat-fieldname OF STRUCTURE ps_hrp_add TO <fs_campo_add>.
+        CHECK sy-subrc EQ 0.
+        APPEND INITIAL LINE TO pt_risk_cdfs ASSIGNING FIELD-SYMBOL(<fs_risk_cdf>).
+        <fs_risk_cdf>-fieldname = ls_dyn_cat-fieldname.
+        <fs_risk_cdf>-value     = <fs_campo_add>.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_NO_MOD_MEDIDA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LS_MEDIDA_COD_BBVA
+*&      <-- LV_LOG_LINE
+*&---------------------------------------------------------------------*
+FORM f_message_no_mod_medida  USING    pv_risk_name
+                                       pv_medida_cod
+                              CHANGING pv_log_line TYPE string.
+  MESSAGE s241(zgrc_wd_msg) WITH  pv_medida_cod pv_risk_name  INTO pv_log_line.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form ASIGNAR_MEDIDA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LV_ID_RESP_T
+*&      --> PV_OBJID
+*&---------------------------------------------------------------------*
+FORM asignar_medida  USING    pv_id_resp
+                              pv_id_risk
+                              pv_medida_cod
+                              pv_risk_name
+                              ps_resp_t_data TYPE grrm_s_api_response_templ_list "valores a heredar desde response template
+                              pt_resp_t_cdfs TYPE grfn_t_api_customfield_data    "cdfs a heredar desde response template
+                              pt_medidas     TYPE grrm_t_api_response_instance "medidas creadas con el modelo de medidas suministrado
+                     CHANGING pt_logger      TYPE gtty_logger.
+   DATA:  lo_response    TYPE REF TO cl_grrm_api_response,
+          lo_resp_temp   TYPE REF TO cl_grrm_api_response_template,
+          ls_response    TYPE        grrm_s_api_response_data,
+          ls_risk_data   TYPE        grrm_s_api_risk_data,
+          ls_resp_t_data TYPE        grrm_s_api_response_templ_list,  "valores a heredar desde response template
+          lt_resp_cdfs   TYPE        grfn_t_api_customfield, "cdfs a heredar desde response template
+          lv_response_id TYPE        grfn_api_object_id,
+          lv_id_resp_t   TYPE        grfn_api_object_id,
+          lo_session     TYPE REF TO cl_grfn_api_session,
+          lv_orgunit_id  TYPE        hrobjid,
+          lt_risk        TYPE        grrm_t_api_risk_response,
+          ls_risk        TYPE        grrm_s_api_response_risk,
+          lv_uname       TYPE        syuname,
+          lv_guid        TYPE        grfn_guid,
+          lv_object_id   TYPE        grfn_object_id,
+          lv_entity_id   TYPE        grfn_api_entity_id,
+          lo_exc         TYPE REF TO cx_grfn_exception,
+          lv_log_line    type        string.
+
+    TRY.
+
+        CALL METHOD cl_grfn_api_session=>open_daily
+          EXPORTING
+            iv_language = gc_espanol
+          RECEIVING
+            ro_instance = lo_session.
+****    recorro las medidas obtenidas del modelo suminsitrado para asignarlas al riesgo local
+        LOOP AT pt_medidas ASSIGNING FIELD-SYMBOL(<fs_medida>).
+           CLEAR: ls_response,
+                  ls_risk,
+                  lt_risk,
+                  lv_log_line.
+***         obtengo los datos de la medida a asignar
+           lo_response ?= lo_session->get( <fs_medida>-response_id ).
+           lo_response->retrieve(
+                EXPORTING iv_editable            = abap_true
+                          iv_editable_auth_delay = abap_true
+                IMPORTING es_response_data       = ls_response
+                          et_risk_list           = lt_risk ).
+****
+****        código basado en la GRRM_WD_RESPONSE_ASSIGN-> COMPONENTCONTROLLER -> ASSIGN
+           CASE ls_response-resp_sharing.
+
+                " -- compartir con aprobación
+              WHEN cl_grrm_cases_model=>mc_resp_shared_approval.
+
+                CLEAR ls_risk.
+                ls_risk-risk_id     = pv_id_risk.
+                ls_risk-response_id = ls_response-response_id.
+                ls_risk-request_on  = sy-datum.
+                ls_risk-request_by  = sy-uname.
+                ls_risk-status      = cl_grrm_cnst_case=>mc_resp_shrng_aprvd.
+
+                lv_uname = sy-uname.
+                IF ls_response-processor <> lv_uname.
+                  ls_risk-status = cl_grrm_cnst_case=>mc_resp_shrng_pendng.
+                ENDIF.
+                INSERT ls_risk INTO TABLE lt_risk.
+
+                " -- compartir sin aprobación
+              WHEN cl_grrm_cases_model=>mc_resp_shared_not_approval.
+
+                CLEAR ls_risk.
+                ls_risk-risk_id     = pv_id_risk.
+                ls_risk-response_id = ls_response-response_id.
+                ls_risk-request_on  = sy-datum.
+                ls_risk-request_by  = sy-uname.
+                ls_risk-status      = cl_grrm_cnst_case=>mc_resp_shrng_aprvd.
+                INSERT ls_risk INTO TABLE lt_risk.
+
+                " -- No compartir
+              WHEN cl_grrm_cases_model=>mc_resp_shared_none OR space.
+
+                CLEAR ls_risk.
+                ls_risk-risk_id     = pv_id_risk.
+                ls_risk-response_id = ls_response-response_id.
+                INSERT ls_risk INTO TABLE lt_risk.
+
+            ENDCASE.
+***
+****      guardo la nueva asignación de la medida al riesgo local
+            lo_response->update(
+                is_response_update = ls_response
+                iv_risk_id         = pv_id_risk
+                it_risk_list       = lt_risk ).
+****
+            lv_uname = sy-uname.
+****        si es para compartir
+            IF ls_response-resp_sharing EQ cl_grrm_cases_model=>mc_resp_shared_approval.
+              IF ls_response-processor <> lv_uname.
+
+                IF ls_response-response_id IS NOT INITIAL.
+                  lv_guid = cl_grfn_api_ident=>get_guid( ls_response-response_id ).
+                ENDIF.
+*    **   activa el compoartir
+                    cl_grrm_util_resp_wf=>start_sharing(
+                    iv_guid      = lv_guid
+                    iv_object_id = lv_object_id
+                    iv_entity_id = lv_entity_id ).
+*    **
+              ENDIF.
+            ENDIF.
+***
+         ENDLOOP.
+****
+    CATCH cx_grfn_exception INTO lo_exc.
+             PERFORM f_message_error_asignar_medida USING  pv_risk_name pv_medida_cod  CHANGING lv_log_line.
+             PERFORM f_add_log_line                 USING pv_risk_name lv_log_line     CHANGING pt_logger.
+    ENDTRY.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_ERROR_ASIGNAR_MEDIDA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> PV_RISK_NAME
+*&      --> PS_MEDIDA_COD_BBVA
+*&      <-- LV_LOG_LINE
+*&---------------------------------------------------------------------*
+FORM f_message_error_asignar_medida USING    pv_risk_name
+                                             pv_medida_cod
+                                    CHANGING pv_log_line    TYPE string.
+  MESSAGE s239(zgrc_wd_msg) WITH  pv_medida_cod pv_risk_name  INTO pv_log_line.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form GET_MEDIDAS
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LV_ID_RESP_T
+*&      --> LT_MEDIDAS
+*&---------------------------------------------------------------------*
+FORM get_medidas  USING    pv_id_resp_t   TYPE grfn_api_object_id
+                           pv_risk_name
+                           pv_medida_cod
+                           pc_lang
+                  CHANGING ps_resp_t_data TYPE grrm_s_api_response_templ_list "valores a heredar desde response template
+                           pt_resp_t_cdfs TYPE grfn_t_api_customfield_data    "cdfs a heredar desde response template
+                           pt_medidas     TYPE grrm_t_api_response_instance
+                           pt_logger      TYPE gtty_logger.
+  DATA: lo_resp_temp   TYPE REF TO cl_grrm_api_response_template,
+        lv_id_resp_t   TYPE        grfn_api_object_id,
+        lo_session     TYPE REF TO cl_grfn_api_session.
+  DATA  lv_log_line    TYPE string.
+
+   TRY.
+        CALL METHOD cl_grfn_api_session=>open_daily
+          EXPORTING
+            iv_language = pc_lang
+          RECEIVING
+            ro_instance = lo_session.
+        lo_resp_temp ?=  lo_session->get( pv_id_resp_t ).
+***     obtengo datos del response template
+        lo_resp_temp->if_grrm_api_response_template~retrieve( IMPORTING
+                                                                          es_data     = ps_resp_t_data
+                                                                          et_response = pt_medidas ).
+***        obtengo los cdfs del resp template
+        lo_resp_temp->if_grfn_api_customfield~retrieve( IMPORTING et_customfield_data = pt_resp_t_cdfs  ).
+
+      CATCH cx_grfn_exception.
+        PERFORM f_message_no_get_medida USING  pv_risk_name pv_medida_cod CHANGING lv_log_line.
+        PERFORM f_add_log_line          USING pv_risk_name lv_log_line CHANGING pt_logger.
+    ENDTRY.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_MESSAGE_NO_GET_MEDIDA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> PV_RISK_NAME
+*&      --> PS_MEDIDA_COD_BBVA
+*&      <-- LV_LOG_LINE
+*&---------------------------------------------------------------------*
+FORM f_message_no_get_medida   USING    pv_risk_name
+                                        pv_medida_cod
+                               CHANGING pv_log_line TYPE string.
+  MESSAGE s240(zgrc_wd_msg) WITH  pv_medida_cod pv_risk_name  INTO pv_log_line.
+
+ENDFORM.
+
