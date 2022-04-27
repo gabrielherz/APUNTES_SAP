@@ -1,0 +1,58 @@
+*&---------------------------------------------------------------------*
+*& Report ZUPLOAD_SERVER_FILES
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT ZUPLOAD_SERVER_FILES.
+
+INCLUDE ZUPLOAD_SERVER_FILES_SRC.
+INCLUDE ZUPLOAD_SERVER_FILES_SBR.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR: p_file.
+  PERFORM f_ayuda CHANGING p_file.
+
+START-OF-SELECTION.
+  PERFORM f_main.
+  
+  
+  *&---------------------------------------------------------------------*
+*& Include          ZUPLOAD_SERVER_FILES_SRC
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1.
+PARAMETERS: p_FILE(128)   TYPE c LOWER CASE.
+PARAMETERS p_name(128) type c lower case.
+SELECTION-SCREEN END OF BLOCK b1.
+
+*&---------------------------------------------------------------------*
+*& Include          ZUPLOAD_SERVER_FILES_SBR
+*&---------------------------------------------------------------------*
+form f_main.
+  DATA lv_file TYPE sapb-sappfad.
+  DATA lv_target_file TYPE sapb-sappfad VALUE '/tmp/'.
+  IF p_file IS NOT INITIAL.
+    lv_file = p_file.
+    concatenate lv_target_file p_name into lv_target_file.
+
+
+CALL FUNCTION 'ARCHIVFILE_CLIENT_TO_SERVER'
+  EXPORTING
+    path                   = lv_file
+   TARGETPATH             =  lv_target_file
+* EXCEPTIONS
+*   ERROR_FILE             = 1
+*   NO_AUTHORIZATION       = 2
+*   OTHERS                 = 3
+.
+endif.
+ENDFORM.
+
+FORM f_ayuda CHANGING pv_value TYPE char128.
+
+  CALL FUNCTION 'KD_GET_FILENAME_ON_F4'
+    EXPORTING
+      static    = abap_true
+    CHANGING
+      file_name = pv_value.
+
+ENDFORM.
+
