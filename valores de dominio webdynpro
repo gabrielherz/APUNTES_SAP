@@ -1,0 +1,66 @@
+** * Obtengo el ámbito de valores del dominio referentes a la naturaleza para luego insertarlos ene l desplegable
+    DATA: lt_val_nat TYPE STANDARD TABLE OF  dd07v .
+*    CALL FUNCTION 'DD_DOMVALUES_GET'
+*         EXPORTING
+*              domname        = 'ZGRC_DO_NATURALEZA'   "<-- Your Domain Here
+*              text           = 'X'
+*              langu          = sy-langu
+*         TABLES
+*              dd07v_tab      = lt_val_nat
+*         EXCEPTIONS
+*              wrong_textflag = 1
+*              OTHERS         = 2.
+*     CLEAR lt_value_set.
+*                    lt_value_set = VALUE #( FOR <lfs_val_nat> IN lt_val_nat
+*                                  ( name  = <lfs_val_nat>-domvalue_l
+*                                    value = <lfs_val_nat>-ddtext ) ).
+
+*Se establecen los valores naturaleza a seleccionar en el desplegable
+*    lo_child_info->set_attribute_value_set(
+*      EXPORTING
+*        name      = 'ZZNATURE'
+*        value_set =  lt_value_set ).
+
+** * Obtengo el ámbito de valores del dominio referentes a modo de mitigación para luego insertarlos en el desplegable
+*    DATA: lt_val_mod_mit TYPE STANDARD TABLE OF  dd07v .
+*    CALL FUNCTION 'DD_DOMVALUES_GET'
+*         EXPORTING
+*              domname        = 'ZGRC_DO_MODO_MITIGACION'   "<-- Your Domain Here
+*              text           = 'X'
+*              langu          = sy-langu
+*         TABLES
+*              dd07v_tab      = lt_val_mod_mit
+*         EXCEPTIONS
+*              wrong_textflag = 1
+*              OTHERS         = 2.
+*     CLEAR lt_value_set.
+*                    lt_value_set = VALUE #( FOR <lfs_val_mot_mit> IN lt_val_mod_mit
+*                                  ( name  = <lfs_val_mot_mit>-domvalue_l
+*                                    value = <lfs_val_mot_mit>-ddtext ) ).
+*Se establecen los valores modo mitigación a seleccionar en el desplegable
+*    lo_child_info->set_attribute_value_set(
+*      EXPORTING
+*        name      = 'ZZMODO_MITIGACION'
+*        value_set =  lt_value_set ).
+
+*** * Obtengo el ámbito de valores del dominio referentes a elementos del modelo para luego insertarlos en el desplegable
+*    DATA: lt_val_ele_mod TYPE STANDARD TABLE OF  dd07v .
+*    CALL FUNCTION 'DD_DOMVALUES_GET'
+*         EXPORTING
+*              domname        = 'ZGRC_DO_O6_ELEMENT_MODELO'   "<-- Your Domain Here
+*              text           = 'X'
+*              langu          = sy-langu
+*         TABLES
+*              dd07v_tab      = lt_val_ele_mod
+*         EXCEPTIONS
+*              wrong_textflag = 1
+*              OTHERS         = 2.
+*     CLEAR lt_value_set.
+*                    lt_value_set = VALUE #( FOR <lfs_val_ele_mod> IN lt_val_ele_mod
+*                                  ( name  = <lfs_val_ele_mod>-domvalue_l
+*                                    value = <lfs_val_ele_mod>-ddtext ) ).
+**Se establecen los valores elementos del modelo a seleccionar en el desplegable
+*    lo_child_info->set_attribute_value_set(
+*      EXPORTING
+*        name      = 'ZZELEMENT_MODELO'
+*        value_set =  lt_value_set ).
