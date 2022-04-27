@@ -1,0 +1,2 @@
+Obtener texto otr en abap:
+DATA(lv_otr_2) = cl_wd_utilities=>get_otr_text_by_alias( alias = lc_func language = sy-langu ).
