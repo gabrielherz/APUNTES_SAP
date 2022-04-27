@@ -1,0 +1,74 @@
+******************CURSO ODATA***************************************************
+FIOSI Y ODATA 
+
+ODATA VS SOAP
+HTTP-REST
+
+ODATA:
+  - Objetos(entidades)- por ejemplo(Factura)
+  -CRUD (create, read, update, delete)- POST, GET, PUT, DELETE
+
+TRANSACCIONES
+  - SEGW-> construir y modelar los servicios
+
+al acceder a la transacción, crear un servicio, luego se crea un entity set, sale la tabla, se le indica cuál campo es clave entre losque se vayan creando, 
+  - recomendación al crear entidad , crearlo a partir d euna estructura.. Se crea la estrucutra, luego se va al sgew y botón derecho->import-DDC structure, se marcan los campos de la estructura a añadir y se selecciona cuál campo va a ser clave.
+- en association: se obtiene toda la información asociada en una llamada, con navigation proerty permite obtener la factura y las líneas asociadas por ejemplo. 
+  - una vez creado el servico se genera. Al generar se generan 4 clases ABAP, donde: 2 clases acaban en Xxx_MPC y xxx_MPC_EXT -> Definiciones de las entidades.
+   - Xxx_DPC y xxx_DPC_EXT-> Implementación de las operaciones CRUD.
+se crean 2 clases porque se supone que cada vez que se regenere un servicio se regeneraran las clases, por tanto, para evitar borrar  los métodos desarrollados, se trabaja sobre EXT. 
+los métodos que mayoritariamente se utilizarán en las clases EXT son los últimos, que terminan en DELETE, GET, etc.
+Para que el servicio esté públiclo se utiliza la transacción:
+/n/IWFND/MAINT-SERVICES  : para publicar se da click en añadir servicio, se pide el sistema: eso es porque el componente sap que permite la publicación y gestión de servicios de ODATS en SAP es el Gateeway, es un addon, se puede instalar en una misma máquina o en una separada del ERP..
+se selecciona el servicio a crear y se crea, ya se tiene publicado el servicio y. 
+Para probar el servicio se va a  /n/IWFND/GW_CLIENT-> Testear servicios.
+
+CONCEPTOS BÁSICOS A PROBAR:
+ - El fichero Metadata: (WSDL) -> $metadata
+  - Entidades: 
+        las llamamos por el nombre NombreEntidadSet:
+                      -sin la clave-> query(GET), create(POST)
+                      - con clave -> UPDATE(PUT), DELETE y READ(GET)
+                      - adicional al modificador se le puede añadir el modificador $Count
+                      - $Filter  Filtra spor varios de sus atributos.
+                       - Navegaciones ($expand): nos trae datos que pudieron buscarse por separado.
+                          En getEntitySet  se tiene que estar implementado para la navegación
+
+FUNCTION_IMPORTS:  
+Existen unos servicios llamados FunctionImport, son funciones que no están relacionadas a una entidad ni operación de entidad, su utilización permite mayor flexibilización que las funcines CRUD. Para crearlas se da en SEGW botón derecho->crear->functin_import. Tienes dos opciones luego en la tabla al editar, tipo complejo: (BAPIRET2_T por ejemplo), o devoler entidad, etc, se especifica la cardinalidad, y tienes que definir el método HTTP GET/POST.  Luego especificas los parámetros.
+El método el encargado de ejecutar los functionimport es EXECUTE_ACTION DE LA xXx_DPC_EXT 
+
+Para utilizar archivos multimedia se utiliza el método GET_STEAM.
+ .
+TRANSACCIÓN: /N/IWFND/ERROR_LOG -> LOG DE ERRORES:
+Los mensajes de errores no suelen identificar lo que pasa pero se puede seleccionar Replay y así verificar.
+*********************************************************************************
+
+
+PASOS PARA REVISIÓN DE WORKFLOW:
+
+entrar con 3 usuarios:
+User1: zprueba   (aprueba)
+User2: zprueba1 (completa parte d enómina y aprueba)
+zprueba2 = recursos humanos
+en desarrollo paquete zbab_hr
+en programa ZHR_PCN_MONITOR
+
+después de ejcutar entrar pulsar en workplace (sbwp)
+en bandeja de entrada los workflows muestran lo que debes hacer, 
+
+En completar: ccnomina 9132., y en cantidad de horas el númeor de horas 
+
+Parametrizar CECOS en la tabla ZHR_JERARQ_COMP.
+
+****datos de prueba****
+1445 ceco 5001
+1460 ceco 5001
+
+transacción para acceder a workflow: PFTC_CHG
+ws_modelo_workflow / 99900101
+para ver el código fuente se puede:
+
+pulsar worflow builder, luego doble click en la tarea, luego doble click en el nombre de la tarea y luego doble click en el método del bussines object, , todo esto es equivalente a SW01, 
+luego se coloca el pulsor sobre cualquier método y se punlsa ir a programa.
+
